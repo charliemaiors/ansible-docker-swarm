@@ -1,0 +1,48 @@
+- hosts: trystack
+  tasks:
+    - name: get the username running the deploy
+      local_action: command whoami
+      register: username_on_the_host
+    - name: enable epel-release
+      become: yes
+      yum:
+        name: epel-release
+        state: latest
+    - name: installing packages
+      become: yes
+      yum: pkg={{item}} state=latest
+      with_items:
+        - curl
+        - python
+        - git
+        - python-pip
+        - ansible
+    - name: install docker-py
+      become: yes
+      shell: pip install 'docker-py>=1.7.0'
+      args:
+        executable: /bin/bash
+    - name: install docker engine
+      shell: curl -sSL https://get.docker.com/ | sh
+      args:
+        executable: /bin/bash 
+    - name: enable docker without sudo
+      become: yes
+      shell: usermod -aG docker centos
+      args:
+        executable: /bin/bash
+    - name: restart docker
+      become: yes
+      shell: service docker restart
+      args:
+        executable: /bin/bash
+    - name: copy ssh public key
+      copy:
+        src: /home/carlo/.ssh/trystack-maior.pem
+        dest: $HOME/.ssh/trystack-maior.pem
+    - name: login on custom docker registry
+      docker_login:
+        registry_url: https://dockerdemo.ddns.net
+        username: demo
+        password: demo
+        reauthorize: yes
