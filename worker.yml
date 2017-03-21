@@ -1,0 +1,44 @@
+- hosts: slaves
+  tasks:
+    - set_fact:
+        swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker.ini') }}"
+        swarm_manager_ip: "{{ lookup('ini', 'manager_ip section=docker file=worker.ini') }}"
+    - name: install packages
+      become: yes
+      yum: pkg={{item}} state=latest
+      with_items:
+        - curl
+        - python
+        - git
+        - python-pip
+    - name: install docker-py
+      become: yes
+      shell: pip install 'docker-py>=1.7.0'
+      args:
+        executable: /bin/bash
+    - name: install docker engine
+      shell: curl -sSL https://get.docker.com/ | sh
+      args:
+        executable: /bin/bash
+    - name: enable docker without sudo
+      become: yes
+      shell: usermod -aG docker centos
+      args:
+        executable: /bin/bash
+    - name: restart docker
+      become: yes
+      service:
+        name: docker
+        state: restarted
+    - name: login on custom docker registry
+      become: yes
+      docker_login:
+        registry_url: https://dockerdemo.ddns.net
+        username: demo
+        password: demo
+        reauthorize: yes
+    - name: join docker swarm
+      become: yes
+      shell: "docker swarm join --token {{ swarm_join_token }} {{ swarm_manager_ip }}:2377"
+      args:
+        executable: /bin/bash 

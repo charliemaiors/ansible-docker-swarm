@@ -1,8 +1,5 @@
 - hosts: trystack
   tasks:
-    - name: get the username running the deploy
-      local_action: command whoami
-      register: username_on_the_host
     - name: enable epel-release
       become: yes
       yum:
@@ -36,10 +33,14 @@
       service:
         name: docker
         state: restarted
-    - name: copy ssh public key
-      copy:
-        src: /home/carlo/.ssh/trystack-maior.pem
-        dest: $HOME/.ssh/trystack-maior.pem
+    - name: copy files
+      become: yes
+      copy: src={{ item.src }} dest={{ item.dest }}
+      with_items:
+        - { src: /home/carlo/.ssh/trystack-maior.pem, dest: $HOME/.ssh/trystack-maior.pem }
+        - { src: /home/carlo/trystack-ansible/hosts, dest: /etc/ansible/hosts }
+        - { src: /home/carlo/trystack-ansible/worker.yml, dest: $HOME/worker.yml }
+        - { src: /home/carlo/trystack-ansible/worker.ini, dest: $HOME/worker }
     - name: login on custom docker registry
       become: yes
       docker_login:
@@ -47,3 +48,24 @@
         username: demo
         password: demo
         reauthorize: yes
+    - name: initialize docker swarm
+      become: yes
+      shell: docker swarm init
+      args:
+        executable: /bin/bash
+    - name: get worker join token
+      become: yes
+      command: docker swarm join-token worker -q
+      register: join_token
+    - name: insert join token in ini file
+      ini_file:
+        dest: $HOME/worker
+        section: docker
+        option: join_token
+        value: "{{ join_token.stdout }}"
+    - name: insert manager ip address in ini file
+      ini_file:
+        dest: $HOME/worker
+        section: docker
+        option: manager_ip
+        value: "{{ ansible_default_ipv4.address }}"
