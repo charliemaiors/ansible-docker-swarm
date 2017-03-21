@@ -1,6 +1,6 @@
 #! /bin/bash
 
-eval ssh-agent -s
+eval `ssh-agent -s`
 ssh-add
 
 ansible-playbook master.yml
