@@ -1,5 +1,9 @@
 #! /bin/bash
 
+read -p "write the ip address of first slave: " host_ip
+sed -i "s/changeme-1*/$host_ip*/g" hosts
+
+
 eval `ssh-agent -s`
 ssh-add /home/carlo/.ssh/trystack-maior.pem
 
