@@ -1,8 +1,13 @@
 - hosts: slaves
   tasks:
     - set_fact:
-        swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker.ini') }}"
-        swarm_manager_ip: "{{ lookup('ini', 'manager_ip section=docker file=worker.ini') }}"
+        swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker') }}"
+        swarm_manager_ip: "{{ lookup('ini', 'manager_ip section=docker file=worker') }}"
+    - name: enable epel-release
+      become: yes
+      yum:
+        name: epel-release
+        state: latest
     - name: install packages
       become: yes
       yum: pkg={{item}} state=latest

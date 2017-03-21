@@ -28,19 +28,23 @@
       shell: usermod -aG docker centos
       args:
         executable: /bin/bash
-    - name: restart docker
+    - name: create docker configuration directory
       become: yes
-      service:
-        name: docker
-        state: restarted
+      file: path=/etc/systemd/system/docker.service.d state=directory
     - name: copy files
       become: yes
       copy: src={{ item.src }} dest={{ item.dest }}
       with_items:
-        - { src: /home/carlo/.ssh/trystack-maior.pem, dest: $HOME/.ssh/trystack-maior.pem }
+        - { src: /home/carlo/.ssh/trystack-maior.pem, dest: "{{ ansible_env.HOME }}/.ssh/trystack-maior.pem" }
         - { src: /home/carlo/trystack-ansible/hosts, dest: /etc/ansible/hosts }
-        - { src: /home/carlo/trystack-ansible/worker.yml, dest: $HOME/worker.yml }
-        - { src: /home/carlo/trystack-ansible/worker.ini, dest: $HOME/worker }
+        - { src: /home/carlo/trystack-ansible/worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
+        - { src: /home/carlo/trystack-ansible/docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
+    - name: restart docker and reload conf
+      become: yes
+      systemd:
+        name: docker
+        state: restarted
+        daemon-reload: yes
     - name: login on custom docker registry
       become: yes
       docker_login:
@@ -59,13 +63,13 @@
       register: join_token
     - name: insert join token in ini file
       ini_file:
-        dest: $HOME/worker
+        dest: "{{ ansible_env.HOME }}/worker"
         section: docker
         option: join_token
         value: "{{ join_token.stdout }}"
     - name: insert manager ip address in ini file
       ini_file:
-        dest: $HOME/worker
+        dest: "{{ ansible_env.HOME }}/worker"
         section: docker
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
