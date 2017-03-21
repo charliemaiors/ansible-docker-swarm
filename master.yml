@@ -33,14 +33,15 @@
         executable: /bin/bash
     - name: restart docker
       become: yes
-      shell: service docker restart
-      args:
-        executable: /bin/bash
+      service:
+        name: docker
+        state: restarted
     - name: copy ssh public key
       copy:
         src: /home/carlo/.ssh/trystack-maior.pem
         dest: $HOME/.ssh/trystack-maior.pem
     - name: login on custom docker registry
+      become: yes
       docker_login:
         registry_url: https://dockerdemo.ddns.net
         username: demo
