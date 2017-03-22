@@ -40,22 +40,57 @@ if !check_binary ansible; then
   $_ex $_pkgmgr 'install -y ansible'
 fi
 
-read -p "What is "
+read -p "What is the name of remote docker-master key (with file extension)? " host_key
+export host_key=${host_key}
 
-read -p "how many workers you have? " host_number
+read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+if [ "${loc_answer}" != "" -o "${loc_answer}" = "n" -o "${loc_answer}" = "N" -o "${loc_answer}" = "No" ]; then
+   read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+   export host_key_path=${host_key_loc}
+else
+  export host_key_path=$HOME/.ssh
+fi
 
-if ! [[ $host_number = $isnumber ]] ; then
+read -p "What is the ip/dns name of remote docker-master? " host_name
+export  host_name=${host_name}
+
+read -p "What is the default user of docker-master? " ansible_user
+export ansible_user=${ansible_user}
+
+$_ex 'echo "[docker]" >> /etc/ansible/hosts'
+$_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key}" >> /etc/ansible/hosts' 
+
+
+read -p "The ssh key to connect to your workers different from the docker master key?[y/n] " answer
+export  answer=${answer}
+if [ "${answer}" != "" ]; then
+   if [ "${answer}" = "y" -o "${answer}" = "Y" -o "${answer}" = "yes" ]; then
+     read -p "What is the name of workers ssh private key (included extension)? " ssh_workers
+     export SSH_WORKERS=${ssh_workers}
+     read -p "Where is located, please enter full path [leave blank if is in the same folder of this script]: " ssh_location_workers
+     if [ "${ssh_location_workers}" != "" ]; then
+       $_ex 'copy ${ssh_location_workers} .'
+     fi
+   else
+     export SSH_WORKERS=${host_key} 
+   fi
+else 
+  export SSH_WORKERS=${host_key}
+fi
+
+read -p "how many workers you have? " workers_number
+
+if ! [[ $workers_number = $isnumber ]] ; then
    echo "error: Not an integer number" >&2; exit 1
 fi
 
-read -p "write the ip address of the first slave: " host_ip
-sed -i "s|changeme1 ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=trystack-maior.pem|$host_ip ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=trystack-maior.pem|g" hosts
-
-read -p "write the ip address of the second slave: " host_ip
-sed -i "s|changeme2 ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=trystack-maior.pem|$host_ip ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=trystack-maior.pem|g" hosts
+for i in $(seq 1 $workers_number); do
+   read -p "write the ip address of slave number ${i}: " host_ip
+   $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=${ssh_workers}"'
+done
 
 eval `ssh-agent -s`
-ssh-add /home/carlo/.ssh/trystack-maior.pem
+ssh-add ${host_key_path}/${host_key}
 
 ansible-playbook master.yml
-ssh trystack bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval `ssh-agent -s`; ssh-add ~/.ssh/trystack-maior.pem; ansible-playbook worker.yml'
+ssh trystack bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval `ssh-agent -s`; ssh-add ~/.ssh/${SSH_WORKERS}; ansible-playbook worker.yml'

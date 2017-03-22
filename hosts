@@ -1,3 +1,1 @@
 [slaves]
-changeme1 ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=trystack-maior.pem
-changeme2 ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=trystack-maior.pem

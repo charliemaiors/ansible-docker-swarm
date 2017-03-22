@@ -1,5 +1,8 @@
-- hosts: trystack
+- hosts: docker
   tasks:
+    - name: Getting parameters from environment variables
+      set_fact:
+        - workers_key: "{{ lookup('env', 'SSH_WORKERS') }}"
     - name: enable epel-release
       become: yes
       yum:
@@ -35,10 +38,10 @@
       become: yes
       copy: src={{ item.src }} dest={{ item.dest }}
       with_items:
-        - { src: /home/carlo/.ssh/trystack-maior.pem, dest: "{{ ansible_env.HOME }}/.ssh/trystack-maior.pem" }
-        - { src: /home/carlo/trystack-ansible/hosts, dest: /etc/ansible/hosts }
-        - { src: /home/carlo/trystack-ansible/worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
-        - { src: /home/carlo/trystack-ansible/docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
+        - { src: {{ workers_key }}, dest: "{{ ansible_env.HOME }}/.ssh/trystack-maior.pem" }
+        - { src: hosts, dest: /etc/ansible/hosts }
+        - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
+        - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
     - name: restart docker and reload conf
       become: yes
       systemd:
