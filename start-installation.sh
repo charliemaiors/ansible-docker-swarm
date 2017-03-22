@@ -96,4 +96,4 @@ eval `ssh-agent -s`
 ssh-add ${host_key_path}/${host_key}
 
 ansible-playbook master.yml
-ssh trystack bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval `ssh-agent -s`; ssh-add ~/.ssh/${SSH_WORKERS}; ansible-playbook worker.yml'
+ssh ${ansible_user}@${host_name} bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval `ssh-agent -s`; ssh-add ~/.ssh/${SSH_WORKERS}; ansible-playbook worker.yml'
