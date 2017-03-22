@@ -89,6 +89,9 @@ for i in $(seq 1 $workers_number); do
    $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=${ssh_workers}"'
 done
 
+export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null
+export ANSIBLE_HOST_KEY_CHECKING=False
+
 eval `ssh-agent -s`
 ssh-add ${host_key_path}/${host_key}
 
