@@ -1,4 +1,4 @@
-- hosts: trystack
+- hosts: docker
   tasks:
     - name: enable epel-release
       become: yes
