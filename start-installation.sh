@@ -21,7 +21,7 @@ check_answer () {
       return 0
     fi
  else
-   return 0 #A null answer is equal to a affermative answer   
+   return 0 #A null answer is equal to an affermative answer   
  fi
 }
 
@@ -99,7 +99,7 @@ fi
 
 read -p "how many workers you have? " workers_number
 
-if ! [[ $workers_number = $isnumber ]] ; then
+if ! [[ $workers_number =~ $isnumber ]] ; then
    echo "error: Not an integer number" >&2; exit 1
 fi
 
