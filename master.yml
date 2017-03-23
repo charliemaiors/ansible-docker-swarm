@@ -8,7 +8,7 @@
       yum:
         name: epel-release
         state: latest
-    - name: installing packages
+    - name: installing packages centos
       become: yes
       yum: pkg={{item}} state=latest
       with_items:
@@ -17,6 +17,18 @@
         - git
         - python-pip
         - ansible
+      when:
+        - ansible_distribution == "CentOS"
+    - name: installing packages ubuntu
+      apt: name={{item}} state=latest
+      with_items:
+        - curl
+        - python
+        - git
+        - python-pip
+        - ansible
+      when:
+        - (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian")
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
@@ -28,7 +40,7 @@
         executable: /bin/bash 
     - name: enable docker without sudo
       become: yes
-      shell: usermod -aG docker centos
+      shell: usermod -aG docker "{{ ansible_env.USER }}"
       args:
         executable: /bin/bash
     - name: create docker configuration directory
