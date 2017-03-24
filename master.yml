@@ -89,6 +89,7 @@
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
     - name: export key name
+      become: yes
       shell: echo 'SSH_WORKERS="{{ workers_key }}"' >> /etc/environment
-      executable:
-        args: /bin/bash
+      args:
+        executable: /bin/bash

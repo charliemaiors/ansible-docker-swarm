@@ -116,6 +116,5 @@ ansible-playbook master.yml
 ssh ${ansible_user}@${host_name} bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval ssh-agent -s; ssh-add /.ssh/${SSH_WORKERS}; ansible-playbook worker.yml'
 
 echo "Cleaning up"
-rm remote_exec
 rm $SSH_WORKERS
-
+echo "[slaves]" > hosts
