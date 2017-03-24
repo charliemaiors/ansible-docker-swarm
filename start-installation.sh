@@ -112,6 +112,11 @@ ssh-add ${host_key_path}/${host_key}
 #echo "Generating script"
 #echo "export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null\nexport ANSIBLE_HOST_KEY_CHECKING=False\neval ssh-agent -s\nssh-add /.ssh/${SSH_WORKERS}\nansible-playbook worker.yml" > remote_exec
 
+read -p "Is docker master ubuntu?[y/n] " answer
+if check_answer $answer; then
+  ansible-playbook ubuntu.yml
+fi
+
 ansible-playbook master.yml
 ssh ${ansible_user}@${host_name} bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval `ssh-agent -s` ; ssh-add $HOME/.ssh/${SSH_WORKERS}; ansible-playbook worker.yml'
 

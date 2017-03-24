@@ -8,6 +8,8 @@
       yum:
         name: epel-release
         state: latest
+      when:
+        - ansible_distribution == "CentOS"
     - name: installing packages centos
       become: yes
       yum: pkg={{item}} state=latest
@@ -20,6 +22,7 @@
       when:
         - ansible_distribution == "CentOS"
     - name: installing packages ubuntu
+      become: yes
       apt: name={{item}} state=latest
       with_items:
         - curl
