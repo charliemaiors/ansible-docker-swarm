@@ -6,5 +6,7 @@
       raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
     - setup: 
   tasks: 
-    - name: I am a damned ubuntu
-      shell: echo "I'm ubuntu"
+    - name: Updating...
+      apt:
+        update_cache: yes
+        upgrade: full
