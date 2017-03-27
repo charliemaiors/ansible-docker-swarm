@@ -26,7 +26,7 @@ check_answer () {
 }
 
 check_is_number() {
-  if ! [[ $1 = $isnumber ]] ; then
+  if ! [[ $1 =~ $isnumber ]] ; then
    echo "error: Not an integer number" >&2; exit 1
   fi
 }
@@ -114,10 +114,6 @@ else
 fi
 
 read -p "how many workers you have? " workers_number
-
-if ! [[ $workers_number =~ $isnumber ]] ; then
-   echo "error: Not an integer number" >&2; exit 1
-fi
 
 echo "Preparing workers host file"
 
