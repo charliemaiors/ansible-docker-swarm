@@ -25,6 +25,12 @@ check_answer () {
  fi
 }
 
+check_is_number() {
+  if ! [[ $1 = $isnumber ]] ; then
+   echo "error: Not an integer number" >&2; exit 1
+  fi
+}
+
 #Execute command?
 _ex='sh -c'
 if [ "${USER}" != "root" ]; then
@@ -112,6 +118,15 @@ read -p "how many workers you have? " workers_number
 if ! [[ $workers_number =~ $isnumber ]] ; then
    echo "error: Not an integer number" >&2; exit 1
 fi
+
+echo "Preparing workers host file"
+
+read -p "Do you have ubuntu workers?[y/n] " ubuntu_workers
+export ubuntu_workers=$ubuntu_workers
+if check_answer $ubuntu_workers; then
+   echo "[ubuntu-workers]" > hosts
+fi
+
 
 for i in $(seq 1 $workers_number); do
    read -p "write the ip address of slave number ${i}: " host_ip
