@@ -69,11 +69,12 @@ if check_binary ansible; then
   read -p "is ansible host already configured with docker section which point to your docker-master node?[y/n] " already_configured
   export already_configured=$already_configured
   if check_answer $already_configured; then
+  
     echo "Double checking is better..."
-    present=cat /etc/ansible/hosts | grep $host_name
+    present=`cat /etc/ansible/hosts | grep $host_name`
     
     if [ -z $present ]; then
-      echo "Account is not configured or hostname is typed wrong, please check your local installation of ansible!\nExiting..." >&2
+      echo "Account is not configured or hostname contains typos, please check your local installation of ansible!\nExiting..." >&2
       exit 1
     fi
     
