@@ -52,11 +52,11 @@ read -p "What is the name of remote docker-master key (with file extension)? " h
 export host_key=${host_key}
 
 read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-if [[ $(check_answer $loc_answer) -eq 1 ]]; then
+if check_answer $loc_answer; then
+   export host_key_path=$HOME/.ssh
+else
    read -p "Where is located docker-master ssh key?[only path] "host_key_loc
    export host_key_path=${host_key_loc}
-else
-  export host_key_path=$HOME/.ssh
 fi
 
 read -p "What is the ip/dns name of remote docker-master? " host_name
@@ -65,9 +65,13 @@ export  host_name=${host_name}
 read -p "What is the default user of docker-master? " ansible_user
 export ansible_user=${ansible_user}
 
-if  check_binary ansible; then
+if check_binary ansible; then
   read -p "is ansible host already configured with docker section which point to your docker-master node?[y/n] " already_configured
-  if [[ $(check_answer $already_configured) -eq 1 ]]; then
+  export already_configured=$already_configured
+  if check_answer $already_configured; then
+    echo "Everything configured"
+  else
+    echo "Configuring..."
     $_ex 'echo "[docker]" >> /etc/ansible/hosts'
     $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key}" >> /etc/ansible/hosts'
   fi
