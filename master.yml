@@ -1,11 +1,16 @@
 - hosts: docker
   tasks:
+    - name: Getting parameters from environment variables
+      set_fact:
+        workers_key: "{{ lookup('env', 'SSH_WORKERS') }}"
     - name: enable epel-release
       become: yes
       yum:
         name: epel-release
         state: latest
-    - name: installing packages
+      when:
+        - ansible_distribution == "CentOS"
+    - name: installing packages centos
       become: yes
       yum: pkg={{item}} state=latest
       with_items:
@@ -14,6 +19,19 @@
         - git
         - python-pip
         - ansible
+      when:
+        - ansible_distribution == "CentOS"
+    - name: installing packages ubuntu
+      become: yes
+      apt: name={{item}} state=latest
+      with_items:
+        - curl
+        - python
+        - git
+        - python-pip
+        - ansible
+      when:
+        - (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian")
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
@@ -25,7 +43,7 @@
         executable: /bin/bash 
     - name: enable docker without sudo
       become: yes
-      shell: usermod -aG docker centos
+      shell: usermod -aG docker "{{ ansible_env.USER }}"
       args:
         executable: /bin/bash
     - name: create docker configuration directory
@@ -35,10 +53,10 @@
       become: yes
       copy: src={{ item.src }} dest={{ item.dest }}
       with_items:
-        - { src: /home/carlo/.ssh/trystack-maior.pem, dest: "{{ ansible_env.HOME }}/.ssh/trystack-maior.pem" }
-        - { src: /home/carlo/trystack-ansible/hosts, dest: /etc/ansible/hosts }
-        - { src: /home/carlo/trystack-ansible/worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
-        - { src: /home/carlo/trystack-ansible/docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
+        - { src: "{{ workers_key }}", dest: "{{ ansible_env.HOME }}/.ssh/" }
+        - { src: hosts, dest: /etc/ansible/hosts }
+        - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" } 
+        - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
     - name: restart docker and reload conf
       become: yes
       systemd:
@@ -73,3 +91,8 @@
         section: docker
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
+    - name: export key name
+      become: yes
+      shell: echo 'SSH_WORKERS="{{ workers_key }}"' >> /etc/environment
+      args:
+        executable: /bin/bash

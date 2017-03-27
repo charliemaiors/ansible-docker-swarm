@@ -1,0 +1,12 @@
+- hosts: docker
+  gather_facts: False
+  pre_tasks:
+    - name: install-python 2 if ubuntu
+      become: yes
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+    - setup: 
+  tasks: 
+    - name: Updating...
+      apt:
+        update_cache: yes
+        upgrade: full
