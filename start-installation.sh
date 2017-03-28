@@ -121,6 +121,12 @@ read -p "Do you have ubuntu workers?[y/n] " ubuntu_workers
 export ubuntu_workers=$ubuntu_workers
 if check_answer $ubuntu_workers; then
    echo "[ubuntu-workers]" > hosts
+   read -p "How many ubuntu workers you have? " workers_number
+   if check_is_number $workers_number; then
+     for i in $(seq 1 $workers_number); do
+        read -p "Write the ip address of current slave: " host_ip
+     done
+   fi 
 fi
 
 
