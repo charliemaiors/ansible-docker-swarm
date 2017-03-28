@@ -1,4 +1,4 @@
-hosts: docker-ubuntu
+hosts: ubuntu-workers
 gather_facts: False
   pre_tasks:
     - name: install-python 2 if ubuntu
@@ -6,11 +6,7 @@ gather_facts: False
       raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
     - setup:
   tasks:
-    set_fact:
-        swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker') }}"
-        swarm_manager_ip: "{{ lookup('ini', 'manager_ip section=docker file=worker') }}"
     - name: Updating...
       apt:
         update_cache: yes
         upgrade: full
-

@@ -31,6 +31,37 @@ check_is_number() {
   fi
 }
 
+compile_ansible_host(){
+    read -p "Write the ip address or hostname of worker number $1: " host_ip
+    export host_ip=${host_ip}
+
+    read -p "What is the default user of worker $1 ? " worker_user
+    export worker_user=${worker_user}
+
+    read -p "What is the name of workers ssh private key (included extension)? " ssh_worker_key
+    export ssh_worker_key=${ssh_worker_key}
+
+    read -p "Private key is in the ${HOME}/.ssh local folder?[y/n] " workers_loc_answer
+    if check_answer ${workers_loc_answer}; then
+        $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/'
+    else
+        read -p "The private key is already in place in remote ${worker_user}/.ssh folder?[y/n] " workers_loc_answer
+        if check_answer ${workers_loc_answer}; then
+            echo "Nothing to copy, key is already in place"
+        else
+            read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
+            if check_answer ${workers_loc_answer}; then #Are you kidding me????
+                read -p "Please write the absolute REMOTE path (without the key name): " remote_path
+                $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts'
+                continue
+            else
+                read -p "Please enter the absolute LOCAL path (without key name): " local_path
+                 $_ex 'cp ${local_path}/${ssh_worker_key} keys/'
+            fi
+        fi
+    fi
+    $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts'
+}
 #Execute command?
 _ex='sh -c'
 if [ "${USER}" != "root" ]; then
@@ -83,18 +114,18 @@ if check_binary ansible; then
       echo "Account is not configured or hostname contains typos, please check your local installation of ansible!\nExiting..." >&2
       exit 1
     fi
-    
+
     echo "Everything configured"
   else
     echo "Configuring..."
     $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-    $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key}" >> /etc/ansible/hosts'
+    $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
   fi
 else
   $_ex '${_pkgmgr} update -y' #if is update -y on ubuntu does not matter
   $_ex '${_pkgmgr} install -y ansible'
   $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-  $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key}" >> /etc/ansible/hosts'
+  $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
 fi
 
 read -p "The ssh key to connect to your workers different from the docker master key?[y/n] " answer
@@ -104,7 +135,7 @@ if check_answer $answer; then
   export SSH_WORKERS=${ssh_workers}
   read -p "Where is located, please enter full path [leave blank if is in the same folder of this script]: " ssh_location_workers
   if [ "${ssh_location_workers}" != "" ]; then
-    $_ex 'copy ${ssh_location_workers} .'
+    $_ex 'cp ${ssh_location_workers} .'
     $_ex 'chmod 666 ${SSH_WORKERS}'
   fi
 else
@@ -113,31 +144,46 @@ else
   $_ex 'chmod 666 ${SSH_WORKERS}'
 fi
 
-read -p "how many workers you have? " workers_number
+echo "Preparing workers host file and folders"
+touch hosts
+mkdir keys
 
-echo "Preparing workers host file"
-
-read -p "Do you have ubuntu workers?[y/n] " ubuntu_workers
-export ubuntu_workers=$ubuntu_workers
+read -p "Do you have Ubuntu workers?[y/n] " ubuntu_workers
+export ubuntu_workers $ubuntu_workers
 if check_answer $ubuntu_workers; then
-   echo "[ubuntu-workers]" > hosts
+   echo "Compiling Ubuntu section"
+   echo "[ubuntu-workers]" >> hosts
    read -p "How many ubuntu workers you have? " workers_number
    if check_is_number $workers_number; then
      for i in $(seq 1 $workers_number); do
-        read -p "Write the ip address of current slave: " host_ip
+        compile_ansible_host $i
      done
    fi 
 fi
 
+read -p "Do you have CentOS workers?[y/n] " centos_workers
+export centos_workers=$centos_workers
+if check_answer $centos_workers; then
+   echo "Compiling CentOS section"
+   $_ex echo "[centos-workers]" >> hosts
+   read -p "How many ubuntu workers you have? " workers_number
+   if check_is_number $workers_number; then
+     for i in $(seq 1 $workers_number); do
+        compile_ansible_host $i
+     done
+   fi
+fi
 
-for i in $(seq 1 $workers_number); do
-   read -p "write the ip address of slave number ${i}: " host_ip
-   export host_ip=${host_ip}
-   $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=centos ansible_ssh_private_key_file=${SSH_WORKERS}" >> hosts'
-done
+echo "Adding last section"
+$_ex echo "[workers:childer]" >> hosts
 
-eval `ssh-agent -s`
-ssh-add ${host_key_path}/${host_key}
+if [ $ubuntu_workers -eq 0 ]; then
+   $_ex echo "ubuntu-workers" >> hosts
+fi
+
+if [ $centos_workers -eq 0 ]; then
+   $_ex echo "centos-workers" >> hosts
+fi
 
 #echo "Generating script"
 #echo "export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null\nexport ANSIBLE_HOST_KEY_CHECKING=False\neval ssh-agent -s\nssh-add /.ssh/${SSH_WORKERS}\nansible-playbook worker.yml" > remote_exec

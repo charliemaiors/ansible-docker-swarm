@@ -1,8 +1,5 @@
 - hosts: docker
   tasks:
-    - name: Getting parameters from environment variables
-      set_fact:
-        workers_key: "{{ lookup('env', 'SSH_WORKERS') }}"
     - name: enable epel-release
       become: yes
       yum:
@@ -53,7 +50,7 @@
       become: yes
       copy: src={{ item.src }} dest={{ item.dest }}
       with_items:
-        - { src: "{{ workers_key }}", dest: "{{ ansible_env.HOME }}/.ssh/" }
+        - { src: keys/, dest: "{{ ansible_env.HOME }}/.ssh/" }
         - { src: hosts, dest: /etc/ansible/hosts }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" } 
         - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
