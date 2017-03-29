@@ -38,29 +38,39 @@ compile_ansible_host(){
     read -p "What is the default user of worker $1 ? " worker_user
     export worker_user=${worker_user}
 
-    read -p "What is the name of workers ssh private key (included extension)? " ssh_worker_key
-    export ssh_worker_key=${ssh_worker_key}
+    read -p "The connection with your worker uses ssh key?[y/n] " ssh_present
+    export ssh_present=${ssh_present}
 
-    read -p "Private key is in the ${HOME}/.ssh local folder?[y/n] " workers_loc_answer
-    if check_answer ${workers_loc_answer}; then
-        $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/'
-    else
-        read -p "The private key is already in place in remote ${worker_user}/.ssh folder?[y/n] " workers_loc_answer
+    if check_answer ${ssh_present}; then
+        read -p "What is the name of workers ssh private key (included extension)? " ssh_worker_key
+        export ssh_worker_key=${ssh_worker_key}
+
+        read -p "Private key is in the ${HOME}/.ssh local folder?[y/n] " workers_loc_answer
         if check_answer ${workers_loc_answer}; then
-            echo "Nothing to copy, key is already in place"
+            $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/'
         else
-            read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
-            if check_answer ${workers_loc_answer}; then #Are you kidding me????
-                read -p "Please write the absolute REMOTE path (without the key name): " remote_path
-                $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts'
-                continue
+            read -p "The private key is already in place in remote ${worker_user}/.ssh folder?[y/n] " workers_loc_answer
+            if check_answer ${workers_loc_answer}; then
+                echo "Nothing to copy, key is already in place"
             else
-                read -p "Please enter the absolute LOCAL path (without key name): " local_path
-                 $_ex 'cp ${local_path}/${ssh_worker_key} keys/'
+                read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
+                if check_answer ${workers_loc_answer}; then #Are you kidding me????
+                    read -p "Please write the absolute REMOTE path (without the key name): " remote_path
+                    $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts'
+                    continue
+                else
+                    read -p "Please enter the absolute LOCAL path (without key name): " local_path
+                     $_ex 'cp ${local_path}/${ssh_worker_key} keys/'
+                fi
             fi
         fi
+        $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts'
+    else
+        stty -echo #Aavoid to display password
+        read -p "Which is your host password? " host_password
+        $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_password}" >> hosts'
+        stty echo #Enable again echo
     fi
-    $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts'
 }
 #Execute command?
 _ex='sh -c'
@@ -82,19 +92,8 @@ elif check_binary aptitue; then #Debian old version?
     _pkgmgr='aptitude'
 fi
 
-#Installing ansible if is not present
-
-
-read -p "What is the name of remote docker-master key (with file extension)? " host_key
-export host_key=${host_key}
-
-read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-if check_answer $loc_answer; then
-   export host_key_path=$HOME/.ssh
-else
-   read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-   export host_key_path=${host_key_loc}
-fi
+echo "creating docker cert directory"
+mkdir certs
 
 read -p "What is the ip/dns name of remote docker-master? " host_name
 export  host_name=${host_name}
@@ -119,29 +118,34 @@ if check_binary ansible; then
   else
     echo "Configuring..."
     $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-    $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+
+    read -p "The connection with your master uses ssh key?[y/n] " ssh_present
+
+    if check_answer $ssh_present; then
+        read -p "What is the name of remote docker-master key (with file extension)? " host_key
+        export host_key=${host_key}
+
+        read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+        if check_answer $loc_answer; then
+           export host_key_path=$HOME/.ssh
+        else
+           read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+           export host_key_path=${host_key_loc}
+        fi
+
+        $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+    else
+        stty -echo
+        read -p "Please type ssh password (it will not be shown): " host_password
+        $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
+        stty echo
+    fi
   fi
 else
   $_ex '${_pkgmgr} update -y' #if is update -y on ubuntu does not matter
   $_ex '${_pkgmgr} install -y ansible'
   $_ex 'echo "[docker]" >> /etc/ansible/hosts'
   $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-fi
-
-read -p "The ssh key to connect to your workers different from the docker master key?[y/n] " answer
-export  answer=${answer}
-if check_answer $answer; then
-  read -p "What is the name of workers ssh private key (included extension)? " ssh_workers
-  export SSH_WORKERS=${ssh_workers}
-  read -p "Where is located, please enter full path [leave blank if is in the same folder of this script]: " ssh_location_workers
-  if [ "${ssh_location_workers}" != "" ]; then
-    $_ex 'cp ${ssh_location_workers} .'
-    $_ex 'chmod 666 ${SSH_WORKERS}'
-  fi
-else
-  export SSH_WORKERS=${host_key} 
-  $_ex 'cp ${host_key_path}/${host_key} .'
-  $_ex 'chmod 666 ${SSH_WORKERS}'
 fi
 
 echo "Preparing workers host file and folders"
@@ -177,16 +181,23 @@ fi
 echo "Adding last section"
 $_ex echo "[workers:childer]" >> hosts
 
-if [ $ubuntu_workers -eq 0 ]; then
+if [ ${ubuntu_workers} -eq 0 ]; then
    $_ex echo "ubuntu-workers" >> hosts
 fi
 
-if [ $centos_workers -eq 0 ]; then
+if [ ${centos_workers} -eq 0 ]; then
    $_ex echo "centos-workers" >> hosts
 fi
 
-#echo "Generating script"
-#echo "export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null\nexport ANSIBLE_HOST_KEY_CHECKING=False\neval ssh-agent -s\nssh-add /.ssh/${SSH_WORKERS}\nansible-playbook worker.yml" > remote_exec
+echo "Generating script"
+touch remote_exec
+echo "#! /bin/bash\nexport ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null\nexport ANSIBLE_HOST_KEY_CHECKING=False\n" > remote_exec
+
+if [ ${ubuntu_workers} -eq 0 ]; then
+    echo "ansible_playbook worker-ubuntu.yml\n" >> remote_exec
+fi
+
+echo "ansible_playbook worker.yml" >> remote_exec
 
 read -p "Is docker master ubuntu?[y/n] " answer
 if check_answer $answer; then
@@ -194,8 +205,8 @@ if check_answer $answer; then
 fi
 
 ansible-playbook master.yml
-ssh ${ansible_user}@${host_name} bash -c 'export ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null; export ANSIBLE_HOST_KEY_CHECKING=False; eval `ssh-agent -s` ; ssh-add $HOME/.ssh/${SSH_WORKERS}; ansible-playbook worker.yml'
+ssh ${ansible_user}@${host_name} bash -c 'remote_exec'
 
 echo "Cleaning up"
-rm $SSH_WORKERS
-echo "[slaves]" > hosts
+$_ex 'rm -rf keys/'
+$_ex 'rm hosts'
