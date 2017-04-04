@@ -207,7 +207,7 @@ if check_answer $answer; then
   ansible-playbook ubuntu.yml
 fi
 
-export host_key_path=cat /etc/ansible/hosts | grep ${host_name} | awk '{print $4}' | cut -d "=" -f 2
+export host_key_path=`cat /etc/ansible/hosts | grep ${host_name} | awk '{print $4}' | cut -d "=" -f 2`
 
 ansible-playbook master.yml
 ssh -i ${host_key_path} ${ansible_user}@${host_name} sudo -E bash -c './remote_exec'
