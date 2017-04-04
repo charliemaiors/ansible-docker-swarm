@@ -51,25 +51,33 @@
     - name: create docker certificate directory
       become: yes
       file: path=/opt/docker state=directory
+    - name: write server extfile
+      become: yes
+      shell: "echo subjectAltName = DNS:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
+      args:
+        executable: /bin/bash
+    - name: write client extfile
+      become: yes
+      shell: echo extendedKeyUsage = clientAuth > /opt/docker/extfileClient.cnf
+      args:
+        executable: /bin/bash
     - name: generate docker certificates
+      become: yes
       command: chdir=/opt/docker {{ item }}
       with_items:
         - openssl genrsa -aes256 -passout pass:x -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem
+        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=GB/ST=London/L=London/O=Global Security/OU=IT Department/CN=example.com"
         - openssl genrsa -out server-key.pem 4096
-        - openssl req -subj "/CN={{ inventory_hostname }}" -sha256 -new -key server-key.pem -out server.csr
-        - echo subjectAltName = DNS:"{{ inventory_hostname }}",IP:"{{ ansible_default_ipv4.address }}",IP:127.0.0.1 > extfile.cnf
-        - openssl x509 -req -days 365 -sha256 -passin pass:x -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfile.cnf
+        - "openssl req -subj \"/CN={{ inventory_hostname }}\" -sha256 -new -key server-key.pem -out server.csr"
+        - openssl x509 -req -days 365 -sha256 -passin pass:x -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
         - openssl genrsa -out key.pem 4096
         - openssl req -subj '/CN=client' -new -key key.pem -out client.csr
-        - echo extendedKeyUsage = clientAuth > extfile.cnf
-        - openssl x509 -req -days 365 -sha256 -passin pass:x -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfile.cnf
-        - rm -v client.csr server.csr
+        - openssl x509 -req -days 365 -sha256 -passin pass:x -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
+        - rm -v client.csr server.csr extfileServer.cnf extfileClient.cnf
         - chmod -v 0444 ca-key.pem key.pem server-key.pem
     - name: fetch client certificates
       become: yes
-      fetch: src={{ item.src }} dest={{ item.dest }}
-      flat: yes
+      fetch: src={{ item.src }} dest={{ item.dest }} flat=yes
       with_items:
         - { src: /opt/docker/ca.pem, dest: certs/ }
         - { src: /opt/docker/cert.pem, dest: certs/ }
@@ -80,7 +88,7 @@
       with_items:
         - { src: keys/, dest: "{{ ansible_env.HOME }}/.ssh/" }
         - { src: hosts, dest: /etc/ansible/hosts }
-        - { src: remote_exec, dest: "{{ ansible_env.HOME }}"/remote_exec }
+        - { src: remote_exec, dest: "{{ ansible_env.HOME }}/remote_exec" }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
         - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
     - name: restart docker and reload conf
@@ -117,3 +125,9 @@
         section: docker
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
+    - name: remove tty requirement for centos docker master
+      become: yes
+      lineinfile:
+        path: /etc/sudoers
+        line: 'Default requiretty'
+        state: absent

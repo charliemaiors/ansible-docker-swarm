@@ -109,7 +109,7 @@ if check_binary ansible; then
     echo "Double checking is better..."
     present=`cat /etc/ansible/hosts | grep $host_name`
     
-    if [ -z $present ]; then
+    if [[ -z $present ]]; then
       echo "Account is not configured or hostname contains typos, please check your local installation of ansible!\nExiting..." >&2
       exit 1
     fi
@@ -157,7 +157,7 @@ export ubuntu_workers $ubuntu_workers
 if check_answer $ubuntu_workers; then
    echo "Compiling Ubuntu section"
    echo "[ubuntu-workers]" >> hosts
-   read -p "How many ubuntu workers you have? " workers_number
+   read -p "How many Ubuntu workers you have? " workers_number
    if check_is_number $workers_number; then
      for i in $(seq 1 $workers_number); do
         compile_ansible_host $i
@@ -170,7 +170,7 @@ export centos_workers=$centos_workers
 if check_answer $centos_workers; then
    echo "Compiling CentOS section"
    $_ex echo "[centos-workers]" >> hosts
-   read -p "How many ubuntu workers you have? " workers_number
+   read -p "How many CentOS workers you have? " workers_number
    if check_is_number $workers_number; then
      for i in $(seq 1 $workers_number); do
         compile_ansible_host $i
@@ -181,19 +181,22 @@ fi
 echo "Adding last section"
 $_ex echo "[workers:childer]" >> hosts
 
-if [ ${ubuntu_workers} -eq 0 ]; then
+if check_answer $ubuntu_workers; then
    $_ex echo "ubuntu-workers" >> hosts
 fi
 
-if [ ${centos_workers} -eq 0 ]; then
+if check_answer $centos_workers; then
    $_ex echo "centos-workers" >> hosts
 fi
+
+echo "Fixing keys folder permission"
+$_ex 'chown -R $USER:$USER keys/; chmod 770 -R keys/'
 
 echo "Generating script"
 touch remote_exec
 echo "#! /bin/bash\nexport ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null\nexport ANSIBLE_HOST_KEY_CHECKING=False\n" > remote_exec
 
-if [ ${ubuntu_workers} -eq 0 ]; then
+if check_answer $ubuntu_workers; then
     echo "ansible_playbook worker-ubuntu.yml\n" >> remote_exec
 fi
 
@@ -204,9 +207,12 @@ if check_answer $answer; then
   ansible-playbook ubuntu.yml
 fi
 
+export host_key_path=cat /etc/ansible/hosts | grep ${host_name} | awk '{print $4}' | cut -d "=" -f 2
+
 ansible-playbook master.yml
-ssh ${ansible_user}@${host_name} bash -c 'remote_exec'
+ssh -i ${host_key_path} ${ansible_user}@${host_name} sudo -E bash -c './remote_exec'
 
 echo "Cleaning up"
 $_ex 'rm -rf keys/'
+$_ex 'rm remote_exec'
 $_ex 'rm hosts'
