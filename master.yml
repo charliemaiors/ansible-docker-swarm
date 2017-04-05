@@ -88,8 +88,8 @@
       with_items:
         - { src: keys/, dest: "{{ ansible_env.HOME }}/.ssh/" }
         - { src: hosts, dest: /etc/ansible/hosts }
-        - { src: remote_exec, dest: "{{ ansible_env.HOME }}/remote_exec" }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
+        - { src: worker-ubuntu.yml, dest: "{{ ansible_env.HOME }}/worker-ubuntu.yml" }
         - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
     - name: restart docker and reload conf
       become: yes
@@ -125,9 +125,3 @@
         section: docker
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
-    - name: remove tty requirement for centos docker master
-      become: yes
-      lineinfile:
-        path: /etc/sudoers
-        line: 'Default requiretty'
-        state: absent

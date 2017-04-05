@@ -1,5 +1,5 @@
-hosts: ubuntu-workers
-gather_facts: False
+- hosts: ubuntu-workers
+  gather_facts: False
   pre_tasks:
     - name: install-python 2 if ubuntu
       become: yes

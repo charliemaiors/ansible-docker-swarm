@@ -64,11 +64,11 @@ compile_ansible_host(){
                 fi
             fi
         fi
-        $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts'
+        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
     else
         stty -echo #Aavoid to display password
         read -p "Which is your host password? " host_password
-        $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_password}" >> hosts'
+        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_password}" >> hosts
         stty echo #Enable again echo
     fi
 }
@@ -92,7 +92,7 @@ elif check_binary aptitue; then #Debian old version?
     _pkgmgr='aptitude'
 fi
 
-echo "creating docker cert directory"
+echo "Creating docker cert directory"
 mkdir certs
 
 read -p "What is the ip/dns name of remote docker-master? " host_name
@@ -149,7 +149,7 @@ else
 fi
 
 echo "Preparing workers host file and folders"
-touch hosts
+echo "#This is a generate hosts file for ansible" > hosts
 mkdir keys
 
 read -p "Do you have Ubuntu workers?[y/n] " ubuntu_workers
@@ -169,7 +169,7 @@ read -p "Do you have CentOS workers?[y/n] " centos_workers
 export centos_workers=$centos_workers
 if check_answer $centos_workers; then
    echo "Compiling CentOS section"
-   $_ex echo "[centos-workers]" >> hosts
+   echo "[centos-workers]" >> hosts
    read -p "How many CentOS workers you have? " workers_number
    if check_is_number $workers_number; then
      for i in $(seq 1 $workers_number); do
@@ -179,28 +179,18 @@ if check_answer $centos_workers; then
 fi
 
 echo "Adding last section"
-$_ex echo "[workers:childer]" >> hosts
+echo "[workers:children]" >> hosts
 
 if check_answer $ubuntu_workers; then
-   $_ex echo "ubuntu-workers" >> hosts
+   echo "ubuntu-workers" >> hosts
 fi
 
 if check_answer $centos_workers; then
-   $_ex echo "centos-workers" >> hosts
+   echo "centos-workers" >> hosts
 fi
 
 echo "Fixing keys folder permission"
 $_ex 'chown -R $USER:$USER keys/; chmod 770 -R keys/'
-
-echo "Generating script"
-touch remote_exec
-echo "#! /bin/bash\nexport ANSIBLE_SSH_ARGS=UserKnownHostsFile=/dev/null\nexport ANSIBLE_HOST_KEY_CHECKING=False\n" > remote_exec
-
-if check_answer $ubuntu_workers; then
-    echo "ansible_playbook worker-ubuntu.yml\n" >> remote_exec
-fi
-
-echo "ansible_playbook worker.yml" >> remote_exec
 
 read -p "Is docker master ubuntu?[y/n] " answer
 if check_answer $answer; then
@@ -210,9 +200,8 @@ fi
 export host_key_path=`cat /etc/ansible/hosts | grep ${host_name} | awk '{print $4}' | cut -d "=" -f 2`
 
 ansible-playbook master.yml
-ssh -i ${host_key_path} ${ansible_user}@${host_name} sudo -E bash -c './remote_exec'
+ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
 
 echo "Cleaning up"
 $_ex 'rm -rf keys/'
-$_ex 'rm remote_exec'
 $_ex 'rm hosts'

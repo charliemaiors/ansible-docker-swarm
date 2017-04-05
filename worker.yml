@@ -1,4 +1,6 @@
-- hosts: workers
+- include: worker-ubuntu.yml
+- name: common play for workers
+  hosts: workers
   tasks:
     - set_fact:
         swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker') }}"
