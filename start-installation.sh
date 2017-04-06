@@ -1,4 +1,6 @@
 #! /bin/bash
+	
+set -x 
 
 isnumber='^[0-9]+$'
 
@@ -38,16 +40,16 @@ compile_ansible_host(){
     read -p "What is the default user of worker $1 ? " worker_user
     export worker_user=${worker_user}
 
-    read -p "The connection with your worker uses ssh key?[y/n] " ssh_present
-    export ssh_present=${ssh_present}
+    read -p "The connection with your worker uses ssh key?[y/n] " ssh_worker_present
+    export ssh_worker_present=${ssh_worker_present}
 
-    if check_answer ${ssh_present}; then
+    if check_answer ${ssh_worker_present}; then
         read -p "What is the name of workers ssh private key (included extension)? " ssh_worker_key
         export ssh_worker_key=${ssh_worker_key}
 
         read -p "Private key is in the ${HOME}/.ssh local folder?[y/n] " workers_loc_answer
         if check_answer ${workers_loc_answer}; then
-            $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/'
+            $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/' # If user can't modify current folder this script is already terminated
         else
             read -p "The private key is already in place in remote ${worker_user}/.ssh folder?[y/n] " workers_loc_answer
             if check_answer ${workers_loc_answer}; then
@@ -67,8 +69,8 @@ compile_ansible_host(){
         echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
     else
         stty -echo #Aavoid to display password
-        read -p "Which is your host password? " host_password
-        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_password}" >> hosts
+        read -p "Which is your host password? " host_worker_password
+        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_worker_password}" >> hosts
         stty echo #Enable again echo
     fi
 }
@@ -95,6 +97,10 @@ fi
 echo "Creating docker cert directory"
 mkdir certs
 
+echo "This script requires administrative privileges"
+$_ex 'echo "$USER" >> /dev/null'
+export current_user=$USER
+
 read -p "What is the ip/dns name of remote docker-master? " host_name
 export  host_name=${host_name}
 
@@ -110,7 +116,7 @@ if check_binary ansible; then
     present=`cat /etc/ansible/hosts | grep $host_name`
     
     if [[ -z $present ]]; then
-      echo "Account is not configured or hostname contains typos, please check your local installation of ansible!\nExiting..." >&2
+      echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
       exit 1
     fi
 
@@ -120,7 +126,7 @@ if check_binary ansible; then
     $_ex 'echo "[docker]" >> /etc/ansible/hosts'
 
     read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-
+    export ssh_present=${ssh_present}
     if check_answer $ssh_present; then
         read -p "What is the name of remote docker-master key (with file extension)? " host_key
         export host_key=${host_key}
@@ -137,6 +143,7 @@ if check_binary ansible; then
     else
         stty -echo
         read -p "Please type ssh password (it will not be shown): " host_password
+        export host_password=${host_password}
         $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
         stty echo
     fi
@@ -189,18 +196,35 @@ if check_answer $centos_workers; then
    echo "centos-workers" >> hosts
 fi
 
-echo "Fixing keys folder permission"
-$_ex 'chown -R $USER:$USER keys/; chmod 770 -R keys/'
-
 read -p "Is docker master ubuntu?[y/n] " answer
 if check_answer $answer; then
-  ansible-playbook ubuntu.yml
+  $_ex 'ansible-playbook ubuntu.yml'
 fi
 
-export host_key_path=`cat /etc/ansible/hosts | grep ${host_name} | awk '{print $4}' | cut -d "=" -f 2`
+$_ex 'ansible-playbook master.yml'
 
-ansible-playbook master.yml
-ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+if [ "${ssh_present}" = "y" -o "${ssh_present}" = "Y" -o "${ssh_present}" = "Yes" ]; then
+   if check_binary sshpass; then
+      sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+   else
+      $_ex '$_pkgmgr install  -y sshpass'
+      sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+   fi
+else
+   pass=$(echo $present | grep ansible_ssh_pass)
+   if [[ ! -z ${pass} ]]; then
+      pass=$(echo $present | grep -o ansible_ssh_pass.* | cut -f2 -d=)
+      if check_binary sshpass; then
+         continue
+      else
+         $_ex '$_pkgmgr install -y sshpass'
+      fi
+      sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+   else
+      host_key_path=$(cat /etc/ansible/hosts | grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
+      ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+   fi
+fi
 
 echo "Cleaning up"
 $_ex 'rm -rf keys/'

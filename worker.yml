@@ -45,7 +45,7 @@
         executable: /bin/bash
     - name: enable docker without sudo
       become: yes
-      shell: usermod -aG docker centos
+      shell: usermod -aG docker "{{ ansible_env.USER }}"
       args:
         executable: /bin/bash
     - name: restart docker
