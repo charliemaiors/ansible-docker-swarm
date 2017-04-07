@@ -203,7 +203,7 @@ fi
 
 $_ex 'ansible-playbook master.yml'
 
-if [ "${ssh_present}" = "y" -o "${ssh_present}" = "Y" -o "${ssh_present}" = "Yes" ]; then
+if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
    if check_binary sshpass; then
       sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
    else
