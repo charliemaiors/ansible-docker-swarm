@@ -33,6 +33,26 @@ check_is_number() {
   fi
 }
 
+check_local_ansible(){ #Uses negative logic
+    
+    host_configured=$(cat /etc/ansible/hosts | grep $host_name)
+    if [ -z host_configured ];then
+       user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d=)
+       if [[ $user_configured != ""]] && [[ $user_configured = $ansible_user ]]; then
+           has_ssh=$(echo $host_configured | grep -o ansible_ssh_private_key_file.*)
+           if [ -z $has_ssh ]; then
+              return 1
+           else
+              has_pass=$(echo $host_configured | grep -o ansible_ssh_pass.*)
+              if [ -z $has_pass ];then
+                 return 1
+              fi
+           fi
+       fi
+    fi
+    return 0
+}
+
 compile_ansible_host(){
     read -p "Write the ip address or hostname of worker number $1: " host_ip
     export host_ip=${host_ip}
@@ -113,9 +133,8 @@ if check_binary ansible; then
   if check_answer $already_configured; then
   
     echo "Double checking is better..."
-    present=`cat /etc/ansible/hosts | grep $host_name`
     
-    if [[ -z $present ]]; then
+    if check_local_ansible; then
       echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
       exit 1
     fi
@@ -221,7 +240,9 @@ else
       fi
       sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
    else
-      host_key_path=$(cat /etc/ansible/hosts | grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
+      if [[ ! -z $host_key_path ]]; then
+          host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
+      fi
       ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
    fi
 fi
