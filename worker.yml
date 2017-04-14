@@ -56,7 +56,7 @@
     - name: login on custom docker registry
       become: yes
       docker_login:
-        registry_url: https://dockerdemo.ddns.net
+        registry: https://dockerdemo.ddns.net
         username: demo
         password: demo
         reauthorize: yes
