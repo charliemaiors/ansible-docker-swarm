@@ -36,8 +36,8 @@ check_is_number() {
 check_local_ansible(){ #Uses negative logic
     
     host_configured=$(cat /etc/ansible/hosts | grep $host_name)
-    if [ -z host_configured ];then
-       user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d=)
+    if [ ! -z ${host_configured+x} ];then
+       user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d= | awk '{print $1}')
        if [[ $user_configured != "" ]] && [[ $user_configured == $ansible_user ]]; then
            has_ssh=$(echo $host_configured | grep -o ansible_ssh_private_key_file.*)
            if [ -z $has_ssh ]; then
@@ -104,14 +104,18 @@ if [ "${USER}" != "root" ]; then
     fi
 fi
 
-#Retrieving package manager
-_pkgmgr=''
+#Retrieving package manage
+PKG_MGR=''
 if check_binary apt-get; then #Ubuntu
-    _pkgmgr='apt-get'
+    PKG_MGR='apt-get'
+    REPO_MGR='apt-add-repository'
 elif check_binary yum; then #CentOS/RedHat
-    _pkgmgr='yum'
+    PKG_MGR='yum'
 elif check_binary aptitue; then #Debian old version?
-    _pkgmgr='aptitude'
+    PKG_MGR='aptitude'
+else
+    echo "Your package manager is not currently supported, exit.."
+    exit 2
 fi
 
 echo "Creating docker cert directory"
@@ -168,10 +172,32 @@ if check_binary ansible; then
     fi
   fi
 else
-  $_ex '${_pkgmgr} update -y' #if is update -y on ubuntu does not matter
-  $_ex '${_pkgmgr} install -y ansible'
+  if [[ $PKG_MGR == 'apt-get' ]]; then
+  $_ex "$REPO_MGR -y ppa:ansible/ansible;" 
+  fi
+  $_ex "$PKG_MGR update -y; $PKG_MGR install -y ansible"
   $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-  $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+  read -p "The connection with your master uses ssh key?[y/n] " ssh_present
+  export ssh_present=${ssh_present}
+  if check_answer $ssh_present; then
+      read -p "What is the name of remote docker-master key (with file extension)? " host_key
+      export host_key=${host_key}
+
+      read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+      if check_answer $loc_answer; then
+         export host_key_path=$HOME/.ssh
+      else
+         read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+         export host_key_path=${host_key_loc}
+      fi
+      $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+  else
+      stty -echo
+      read -p "Please type ssh password (it will not be shown): " host_password
+      export host_password=${host_password}
+      $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
+      stty echo
+  fi
 fi
 
 echo "Preparing workers host file and folders"
@@ -226,7 +252,7 @@ if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No"
    if check_binary sshpass; then
       sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
    else
-      $_ex '$_pkgmgr install  -y sshpass'
+      $_ex "$PKG_MGR install  -y sshpass"
       sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
    fi
 else
@@ -236,11 +262,11 @@ else
       if check_binary sshpass; then
          continue
       else
-         $_ex '$_pkgmgr install -y sshpass'
+         $_ex '$PKG_MGR install -y sshpass'
       fi
       sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
    else
-      if [[ ! -z $host_key_path ]]; then
+      if [[ -z $host_key_path ]]; then
           host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
       fi
       ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'

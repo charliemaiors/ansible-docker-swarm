@@ -53,7 +53,7 @@
       file: path=/opt/docker state=directory
     - name: write server extfile
       become: yes
-      shell: "echo subjectAltName = DNS:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
+      shell: "echo subjectAltName = IP:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
       args:
         executable: /bin/bash
     - name: write client extfile
