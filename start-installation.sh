@@ -38,7 +38,7 @@ check_local_ansible(){ #Uses negative logic
     host_configured=$(cat /etc/ansible/hosts | grep $host_name)
     if [ -z host_configured ];then
        user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d=)
-       if [[ $user_configured != ""]] && [[ $user_configured = $ansible_user ]]; then
+       if [[ $user_configured != "" ]] && [[ $user_configured == $ansible_user ]]; then
            has_ssh=$(echo $host_configured | grep -o ansible_ssh_private_key_file.*)
            if [ -z $has_ssh ]; then
               return 1

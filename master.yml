@@ -73,7 +73,7 @@
         - openssl genrsa -out key.pem 4096
         - openssl req -subj '/CN=client' -new -key key.pem -out client.csr
         - openssl x509 -req -days 365 -sha256 -passin pass:x -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
-        - rm -v client.csr server.csr extfileServer.cnf extfileClient.cnf
+        - rm -v client.csr server.csr
         - chmod -v 0444 ca-key.pem key.pem server-key.pem
     - name: fetch client certificates
       become: yes
