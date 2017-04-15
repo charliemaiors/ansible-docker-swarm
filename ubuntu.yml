@@ -11,3 +11,7 @@
       apt:
         update_cache: yes
         upgrade: full
+    - name: Add official ansible repository
+      become: yes
+      apt_repository:
+        repo: 'ppa:ansible/ansible'
