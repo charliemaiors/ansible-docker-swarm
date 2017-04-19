@@ -1,0 +1,181 @@
+- name: Openstack machine creation
+  hosts: localhost
+  vars_prompt:
+    - name: "openstack_user"
+      prompt: "What is your openstack username?"
+      default: "admin"
+      private: no
+    - name: "openstack_password"
+      prompt: "What is your openstack password?"
+      private: no
+    - name: "openstack_auth_endpoint"
+      prompt: "What is the openstack keystone auth endpoint?"
+      default: "http://localhost:5000/v2"
+      private: no
+    - name: "public_network"
+      prompt: "What is the name of the openstack public network?"
+      default: "public"
+      private: no
+    - name: "project_name"
+      prompt: "What is the project name where deploy the swarm?"
+      default: "admin"
+      private: no
+    - name: "flavor_name"
+      prompt: "What is the flavor name (or id) for instances?"
+      default: "m1.small"
+      private: no
+    - name: "image_name"
+      prompt: "What is the image name (or id) for instances (only ubuntu and centos are supported for now)?"
+      default: "CentOS7"
+      private: no
+    - name: "image_user"
+      prompt: "What is the default user for choosen image?"
+      default: "centos"
+      private: no
+  tasks:
+    - name: define a new security group for docker swarm
+      os_security_group:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        name: swarm
+        state: present
+        description: security group for docker swarm servers
+    - name: enable cluster management for swarm
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 2377
+        port_range_max: 2377
+        remote_ip_prefix: 0.0.0.0/0
+    - name: enable communication among nodes tcp
+      os_security_group_rule:
+        auth:
+         auth_url: "{{ openstack_auth_endpoint }}"
+         username: "{{ openstack_user }}"
+         password: "{{ openstack_password }}"
+         project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 7946
+        port_range_max: 7946
+        remote_ip_prefix: 0.0.0.0/0
+    - name: enable communication among nodes udp
+      os_security_group_rule:
+       auth:
+         auth_url: "{{ openstack_auth_endpoint }}"
+         username: "{{ openstack_user }}"
+         password: "{{ openstack_password }}"
+         project_name: "{{ project_name }}"
+       security_group: swarm
+       protocol: udp
+       port_range_min: 7946
+       port_range_max: 7946
+       remote_ip_prefix: 0.0.0.0/0 
+    - name: enable network traffic
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+        remote_ip_prefix: 0.0.0.0/0
+    - name: define swarm network
+      os_network:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        state: present
+        name: swarm_private
+    - name: define swarm subnet
+      os_subnet:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        state: present
+        network_name: swarm_private
+        name: swarm_subnet_private
+        cidr: 10.0.0.0/24
+        dns_nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+    - name: define swarm router
+      os_router:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        network: "{{ public_network }}"
+        interfaces:
+          - swarm_subnet_private
+        name: swarm_router
+        state: present
+    - name: define swarm keypair
+      os_keypair: 
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         state: present
+         name: swarm_key
+      register: keypair
+    - name: create local private key
+      local_action:
+        module: copy
+        content: "{{ keypair.key.private_key }}"
+        dest: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+    - name: creating docker master machine
+      os_server:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         auto_ip: no
+         flavor: "{{ flavor_name }}"
+         image: "{{ image_name }}"
+         key_name: swarm_key
+         name: docker-master
+         network: swarm_private
+         security_groups: swarm
+         register: dck_mstr
+    - name: allocate floating ip to project and assign to docker-master
+      os_floating_ip:
+         auth:
+            auth_url: "{{ openstack_auth_endpoint }}"
+            username: "{{ openstack_user }}"
+            password: "{{ openstack_password }}"
+            project_name: "{{ project_name }}"
+         server: docker-master
+         reuse: yes
+         fixed_network: swarm_private
+    - name: getting docker-master floating ip
+      os_server_facts:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         server: docker-master
+    - set_fact: docker_public = "{{ dck_mstr.server.public_v4 }}"
+    - name: add docker master to local ansible inventory
+      add_host: hostname={{ docker_public }} groups=docker ansible_ssh_user={{ image_user }} ansible_ssh_private_key_file={{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}
+              
+
