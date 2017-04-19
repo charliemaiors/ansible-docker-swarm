@@ -7,7 +7,7 @@
       private: no
     - name: "openstack_password"
       prompt: "What is your openstack password?"
-      private: no
+      private: yes
     - name: "openstack_auth_endpoint"
       prompt: "What is the openstack keystone auth endpoint?"
       default: "http://localhost:5000/v2"
