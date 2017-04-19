@@ -273,6 +273,19 @@ else
    fi
 fi
 
+echo "Configuring local docker client"
+
+if [ ! -d "$HOME/.docker" ]; then
+    mkdir -p $HOME/.docker
+fi
+
+cp certs/* $HOME/.docker/
+$_ex "chown -R $current_user:$current_user /home/$current_user/.docker/"
+
+export DOCKER_CERT_PATH=$HOME/.docker/
+export DOCKER_HOST=tcp://$host_name:2376
+export DOCKER_TLS_VERIFY=1 
+
 echo "Cleaning up"
 $_ex 'rm -rf keys/'
 $_ex 'rm hosts'
