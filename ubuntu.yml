@@ -3,10 +3,15 @@
   pre_tasks:
     - name: install-python 2 if ubuntu
       become: yes
-      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)
     - setup: 
   tasks: 
     - name: Updating...
+      become: yes
       apt:
         update_cache: yes
         upgrade: full
+    - name: Add official ansible repository
+      become: yes
+      apt_repository:
+        repo: 'ppa:ansible/ansible'

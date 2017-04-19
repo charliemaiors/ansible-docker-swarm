@@ -1,4 +1,6 @@
-- hosts: slaves
+- include: worker-ubuntu.yml
+- name: common play for workers
+  hosts: workers
   tasks:
     - set_fact:
         swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker') }}"
@@ -8,7 +10,9 @@
       yum:
         name: epel-release
         state: latest
-    - name: install packages
+      when:
+        - ansible_distribution == "CentOS"
+    - name: installing packages centos
       become: yes
       yum: pkg={{item}} state=latest
       with_items:
@@ -16,6 +20,20 @@
         - python
         - git
         - python-pip
+        - ansible
+      when:
+        - ansible_distribution == "CentOS"
+    - name: installing packages ubuntu
+      become: yes
+      apt: name={{item}} state=latest
+      with_items:
+        - curl
+        - python
+        - git
+        - python-pip
+        - ansible
+      when:
+        - (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian")
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
@@ -27,7 +45,7 @@
         executable: /bin/bash
     - name: enable docker without sudo
       become: yes
-      shell: usermod -aG docker centos
+      shell: usermod -aG docker "{{ ansible_env.USER }}"
       args:
         executable: /bin/bash
     - name: restart docker
