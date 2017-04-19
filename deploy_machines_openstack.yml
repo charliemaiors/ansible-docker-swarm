@@ -155,7 +155,7 @@
          name: docker-master
          network: swarm_private
          security_groups: swarm
-         register: dck_mstr
+      register: dck_mstr
     - name: allocate floating ip to project and assign to docker-master
       os_floating_ip:
          auth:
@@ -174,8 +174,14 @@
            password: "{{ openstack_password }}"
            project_name: "{{ project_name }}"
          server: docker-master
-    - set_fact: docker_public = "{{ dck_mstr.server.public_v4 }}"
+    - name: get docker master public ip
+      set_fact: 
+         docker_public: "{{ dck_mstr.server.public_v4 }}"
     - name: add docker master to local ansible inventory
-      add_host: hostname={{ docker_public }} groups=docker ansible_ssh_user={{ image_user }} ansible_ssh_private_key_file={{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}
+      add_host: 
+        name: "{{ docker_public }}" 
+        groups: docker 
+        ansible_ssh_user: "{{ image_user }}" 
+        ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
               
 
