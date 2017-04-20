@@ -217,7 +217,7 @@ already_instantiated_cluster(){
     fi
 
     read -p "Is docker master ubuntu?[y/n] " answer
-    if check_answer $answer; then
+    if check_answer $answer; then #modify
       $_ex 'ansible-playbook ubuntu.yml'
     fi
 
@@ -289,15 +289,16 @@ export required_openstack=${required_openstack}
 if check_answer ${required_openstack}; then
     already_instantiated_cluster
 else
-    ansible_ok=$(check_binary ansible)
-    if [[ ${ansible_ok} -eq 1 ]]; then
+    
+    if ! check_binary ansible; then
         install_ansible
     fi
-    $_ex 'ansible_playbook deploy_machines_openstack.yml'
+    $_ex 'ansible-playbook deploy_machines_openstack.yml'
+    source ./env
     if check_answer ${UBUNTU_MANAGER}; then
-        $_ex 'ansible-playboot ubuntu.yml'
+        $_ex 'ansible-playbook ubuntu.yml'
     fi
-    $_ex 'ansible_playbook master.yml'
+    $_ex 'ansible-playbook master.yml'
     ssh -tt -i ${HOME}/.ssh/swarm_key ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
 fi
 

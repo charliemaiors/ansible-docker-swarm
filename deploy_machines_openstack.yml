@@ -38,7 +38,7 @@
       private: no
     - name: ubuntu_workers
       prompt: "Do you want ubuntu workers?[y/n]"
-      default: "no"
+      default: "n"
       private: no
     - name: ubuntu_image
       prompt: "What is the name of ubuntu image?"
@@ -62,7 +62,7 @@
       when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: centos_workers
       prompt: "Do you want CentOS workers?[y/n]"
-      default: "no"
+      default: "n"
       private: no
     - name: centos_image
       prompt: "What is the name of CentOS image?"
@@ -80,7 +80,7 @@
       private: no
       when: centos_workers == "y" or centos_workers == "Y"
     - name: centos_user
-      prompt: "Which is the default user for ubuntu image?"
+      prompt: "Which is the default user for centos image?"
       default: "centos"
       private: no
       when: centos_workers == "y" or centos_workers == "Y"
@@ -94,6 +94,18 @@
           project_name: "{{project_name}}"
         name: swarm
         description: security group for docker swarm servers
+    - name: everybody needs ssh
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+        remote_ip_prefix: 0.0.0.0/0
     - name: enable cluster management for swarm
       os_security_group_rule:
         auth:
@@ -211,7 +223,6 @@
          name: docker-manager
          network: swarm_private
          security_groups: swarm
-      register: dck_mstr
     - name: allocate floating ip to project and assign to docker-master
       os_floating_ip:
          auth:
@@ -232,7 +243,7 @@
          server: docker-manager
     - name: get docker master public ip
       set_fact: 
-         docker_public: "{{ dck_mstr.server.public_v4 }}"
+         docker_public: "{{ openstack_servers.0.public_v4 }}"
     - name: add docker master to local ansible inventory
       add_host: 
         name: "{{ docker_public }}" 
@@ -240,11 +251,11 @@
         ansible_ssh_user: "{{ image_user }}" 
         ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
     - name: export environment variable if is ubuntu
-      local_action: shell export UBUNTU_MANAGER="{{ ubuntu_manager }}"
+      local_action: shell echo "export UBUNTU_MANAGER={{ ubuntu_manager }}" > env
     - name: export user variable
-      local_action: shell export ansible_user="{{ image_user }}
+      local_action: shell echo "export ansible_user={{ image_user }}" >> env
     - name: export host variable
-      local_action: shell export host_name="{{ docker_public }}
+      local_action: shell echo "export host_name={{ docker_public }}" >> env
     - name: create local ansible hosts file
       local_action: shell echo "#This is a generate hosts file for ansible" > hosts
     - name: deploy ubuntu workers
@@ -258,10 +269,10 @@
          flavor: "{{ ubuntu_flavor }}"
          image: "{{ ubuntu_image }}"
          key_name: swarm_key
-         name: docker-ubuntu-worker
+         name: "{{ 'docker-ubuntu-worker-'+item }}"
          network: swarm_private
          security_groups: swarm
-      with_sequence: start=0 end="{{ ubuntu_number }}"
+      with_sequence: count="{{ ubuntu_number }}"
       register: ub_wkr
       when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: creating ubuntu workers section
@@ -279,19 +290,19 @@
            password: "{{ openstack_password }}"
            project_name: "{{ project_name }}"
          auto_ip: no
-         flavor: "{{ ubuntu_flavor }}"
-         image: "{{ ubuntu_image }}"
+         flavor: "{{ centos_flavor }}"
+         image: "{{ centos_image }}"
          key_name: swarm_key
-         name: docker-ubuntu-worker
+         name: "{{ 'docker-centos-worker-'+item }}"
          network: swarm_private
          security_groups: swarm
-      with_sequence: start=0 end="{{ centos_number }}"
+      with_sequence: count="{{ centos_number }}"
       register: cnt_wkr
       when: centos_workers == "y" or centos_workers == "Y"
     - name: creating CentOS workers section
-      local_action: shell echo "[centos-workers]" > hosts
+      local_action: shell echo "[centos-workers]" >> hosts
       when: centos_workers == "y" or centos_workers == "Y"
-    - name: register ubuntu workers to file
+    - name: register centos workers to file
       local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ centos_user }} ansible_ssh_private_key_file=/home/{{ centos_user }}/.ssh/{{ keypair.key.name }}" >> hosts
       with_items: "{{ cnt_wkr.results }}"
       when: centos_workers == "y" or centos_workers == "Y"
