@@ -251,11 +251,11 @@
         ansible_ssh_user: "{{ image_user }}" 
         ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
     - name: export environment variable if is ubuntu
-      local_action: shell echo "export UBUNTU_MANAGER={{ ubuntu_manager }}" > env
+      local_action: shell export UBUNTU_MANAGER="{{ ubuntu_manager }}"
     - name: export user variable
-      local_action: shell echo "export ansible_user={{ image_user }}" >> env
+      local_action: shell export ansible_user="{{ image_user }}"
     - name: export host variable
-      local_action: shell echo "export host_name={{ docker_public }}" >> env
+      local_action: shell export host_name="{{ docker_public }}"
     - name: create local ansible hosts file
       local_action: shell echo "#This is a generate hosts file for ansible" > hosts
     - name: deploy ubuntu workers
@@ -314,4 +314,5 @@
     - name: add centos workers if present
       local_action: shell echo "centos-workers" >> hosts
       when: centos_workers == "y" or centos_workers == "Y"
-
+- name: including master playbook
+  include: master.yml

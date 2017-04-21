@@ -1,3 +1,5 @@
+- include: ubuntu.yml
+
 - hosts: docker
   tasks:
     - name: enable epel-release

@@ -218,7 +218,7 @@ already_instantiated_cluster(){
 
     read -p "Is docker master ubuntu?[y/n] " answer
     if check_answer $answer; then #modify
-      $_ex 'ansible-playbook ubuntu.yml'
+      export UBUNTU_MANAGER=y
     fi
 
     $_ex 'ansible-playbook master.yml'
