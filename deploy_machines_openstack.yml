@@ -154,6 +154,18 @@
         port_range_min: 4789
         port_range_max: 4789
         remote_ip_prefix: 0.0.0.0/0
+    - name: enable manager communication over tls
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 2376
+        port_range_max: 2376
+        remote_ip_prefix: 0.0.0.0/0
     - name: define swarm network
       os_network:
         auth:

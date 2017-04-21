@@ -300,7 +300,7 @@ else
     #fi
     #$_ex 'ansible-playbook master.yml'
     $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
-    ssh -tt -i ${HOME}/.ssh/swarm_key ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+    ssh -tt -i ${HOME}/.ssh/swarm_key ${ansible_user}@${host_name}'ansible-playbook worker.yml'
 fi
 
 echo "Configuring local docker client"
