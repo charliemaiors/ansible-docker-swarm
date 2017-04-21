@@ -204,6 +204,8 @@
         module: copy
         content: "{{ keypair.key.private_key }}"
         dest: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+        mode: 0600
+        owner: "{{ ansible_env.USER }}"
     - name: create copy of key in keys folder
       local_action:
         module: copy
@@ -253,9 +255,9 @@
     - name: export environment variable if is ubuntu
       local_action: shell export UBUNTU_MANAGER="{{ ubuntu_manager }}"
     - name: export user variable
-      local_action: shell export ansible_user="{{ image_user }}"
+      local_action: shell echo "export ansible_user={{ image_user }}" > env
     - name: export host variable
-      local_action: shell export host_name="{{ docker_public }}"
+      local_action: shell echo "export host_name={{ docker_public }}" >> env
     - name: create local ansible hosts file
       local_action: shell echo "#This is a generate hosts file for ansible" > hosts
     - name: deploy ubuntu workers
@@ -279,7 +281,7 @@
       local_action: shell echo "[ubuntu-workers]" > hosts
       when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: register ubuntu workers to file
-      local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ ubuntu_user }} ansible_ssh_private_key_file=/home/{{ ubuntu_user }}/.ssh/{{ keypair.key.name }}" >> hosts
+      local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ ubuntu_user }} ansible_ssh_private_key_file=/home/{{ image_user }}/.ssh/{{ keypair.key.name }}" >> hosts
       with_items: "{{ ub_wkr.results }}"
       when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: deploy centos workers
@@ -303,7 +305,7 @@
       local_action: shell echo "[centos-workers]" >> hosts
       when: centos_workers == "y" or centos_workers == "Y"
     - name: register centos workers to file
-      local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ centos_user }} ansible_ssh_private_key_file=/home/{{ centos_user }}/.ssh/{{ keypair.key.name }}" >> hosts
+      local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ centos_user }} ansible_ssh_private_key_file=/home/{{ image_user }}/.ssh/{{ keypair.key.name }}" >> hosts
       with_items: "{{ cnt_wkr.results }}"
       when: centos_workers == "y" or centos_workers == "Y"
     - name: add global section

@@ -1,9 +1,8 @@
 - hosts: docker
   gather_facts: False
   pre_tasks:
-    - name: lookup if manager is present
-      set_fact:
-        - ubuntu_manager: "{{ lookup('env', 'UBUNTU_MANAGER') }}"
+    - set_fact:
+        ubuntu_manager: "{{ lookup('env', 'UBUNTU_MANAGER') }}"
     - name: install-python 2 if ubuntu
       become: yes
       raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)

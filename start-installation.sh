@@ -295,10 +295,11 @@ else
     fi
     $_ex 'ansible-playbook deploy_machines_openstack.yml'
     source ./env
-    if check_answer ${UBUNTU_MANAGER}; then
-        $_ex 'ansible-playbook ubuntu.yml'
-    fi
-    $_ex 'ansible-playbook master.yml'
+    #if check_answer ${UBUNTU_MANAGER}; then
+    #    $_ex 'ansible-playbook ubuntu.yml'
+    #fi
+    #$_ex 'ansible-playbook master.yml'
+    $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
     ssh -tt -i ${HOME}/.ssh/swarm_key ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
 fi
 
@@ -318,3 +319,4 @@ export DOCKER_TLS_VERIFY=1
 echo "Cleaning up"
 $_ex 'rm -rf keys/'
 $_ex 'rm hosts'
+$_ex 'rm env'
