@@ -319,4 +319,7 @@ export DOCKER_TLS_VERIFY=1
 echo "Cleaning up"
 $_ex 'rm -rf keys/'
 $_ex 'rm hosts'
-$_ex 'rm env'
+
+if ! check_answer $required_openstack; then
+   $_ex 'rm env'
+fi
