@@ -1,0 +1,332 @@
+- name: Openstack machine creation
+  hosts: localhost
+  vars_prompt:
+    - name: openstack_user
+      prompt: "What is your openstack username?"
+      default: "admin"
+      private: no
+    - name: openstack_password
+      prompt: "What is your openstack password?"
+      private: yes
+    - name: openstack_auth_endpoint
+      prompt: "What is the openstack keystone auth endpoint?"
+      default: "http://localhost:5000/v2"
+      private: no
+    - name: public_network
+      prompt: "What is the name of the openstack public network?"
+      default: "public"
+      private: no
+    - name: project_name
+      prompt: "What is the project name where deploy the swarm?"
+      default: "admin"
+      private: no
+    - name: flavor_name
+      prompt: "What is the flavor name (or id) for instances?"
+      default: "m1.small"
+      private: no
+    - name: image_name
+      prompt: "What is the image name (or id) for instances (only ubuntu and centos are supported for now)?"
+      default: "CentOS7"
+      private: no
+    - name: ubuntu_manager
+      prompt: "Is your image Ubuntu or derived from it?[y/n]"
+      default: "n"
+      private: no
+    - name: image_user
+      prompt: "What is the default user for choosen image?"
+      default: "centos"
+      private: no
+    - name: ubuntu_workers
+      prompt: "Do you want ubuntu workers?[y/n]"
+      default: "n"
+      private: no
+    - name: ubuntu_image
+      prompt: "What is the name of ubuntu image?"
+      default: "Ubuntu16.04"
+      private: no
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: ubuntu_flavor
+      prompt: "What is the desired flavor for Ubuntu Workers?"
+      default: "m1.small"
+      private: no
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: ubuntu_number
+      prompt: "How many ubuntu workers you want?"
+      default: "1"
+      private: no
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: ubuntu_user
+      prompt: "Which is the default user for ubuntu image?"
+      default: "ubuntu"
+      private: no
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: centos_workers
+      prompt: "Do you want CentOS workers?[y/n]"
+      default: "n"
+      private: no
+    - name: centos_image
+      prompt: "What is the name of CentOS image?"
+      default: "CentOS7"
+      private: no
+      when: centos_workers == "y" or centos_workers == "Y"
+    - name: centos_flavor
+      prompt: "What is the desired flavor for CentOS Workers?"
+      default: "m1.small"
+      private: no
+      when: centos_workers == "y" or centos_workers == "Y"
+    - name: centos_number
+      prompt: "How many CentOS workers you want?"
+      default: "1"
+      private: no
+      when: centos_workers == "y" or centos_workers == "Y"
+    - name: centos_user
+      prompt: "Which is the default user for centos image?"
+      default: "centos"
+      private: no
+      when: centos_workers == "y" or centos_workers == "Y"
+  tasks:
+    - name: define a new security group for docker swarm
+      os_security_group:
+        auth:
+          auth_url: "{{openstack_auth_endpoint}}"
+          username: "{{openstack_user}}"
+          password: "{{openstack_password}}"
+          project_name: "{{project_name}}"
+        name: swarm
+        description: security group for docker swarm servers
+    - name: everybody needs ssh
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+        remote_ip_prefix: 0.0.0.0/0
+    - name: enable cluster management for swarm
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 2377
+        port_range_max: 2377
+        remote_ip_prefix: 0.0.0.0/0
+    - name: enable communication among nodes tcp
+      os_security_group_rule:
+        auth:
+         auth_url: "{{ openstack_auth_endpoint }}"
+         username: "{{ openstack_user }}"
+         password: "{{ openstack_password }}"
+         project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 7946
+        port_range_max: 7946
+        remote_ip_prefix: 0.0.0.0/0
+    - name: enable communication among nodes udp
+      os_security_group_rule:
+       auth:
+         auth_url: "{{ openstack_auth_endpoint }}"
+         username: "{{ openstack_user }}"
+         password: "{{ openstack_password }}"
+         project_name: "{{ project_name }}"
+       security_group: swarm
+       protocol: udp
+       port_range_min: 7946
+       port_range_max: 7946
+       remote_ip_prefix: 0.0.0.0/0 
+    - name: enable network traffic
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+        remote_ip_prefix: 0.0.0.0/0
+    - name: enable manager communication over tls
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 2376
+        port_range_max: 2376
+        remote_ip_prefix: 0.0.0.0/0
+    - name: define swarm network
+      os_network:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        state: present
+        name: swarm_private
+    - name: define swarm subnet
+      os_subnet:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        state: present
+        network_name: swarm_private
+        name: swarm_subnet_private
+        cidr: 10.0.0.0/24
+        dns_nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+    - name: define swarm router
+      os_router:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        network: "{{ public_network }}"
+        interfaces:
+          - swarm_subnet_private
+        name: swarm_router
+        state: present
+    - name: define swarm keypair
+      os_keypair: 
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         state: present
+         name: swarm_key
+      register: keypair
+    - name: create local private key
+      local_action:
+        module: copy
+        content: "{{ keypair.key.private_key }}"
+        dest: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+        mode: 0600
+        owner: "{{ ansible_env.USER }}"
+    - name: create copy of key in keys folder
+      local_action:
+        module: copy
+        content: "{{ keypair.key.private_key }}"
+        dest: "keys/{{ keypair.key.name }}"
+    - name: creating docker master machine
+      os_server:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         auto_ip: no
+         flavor: "{{ flavor_name }}"
+         image: "{{ image_name }}"
+         key_name: swarm_key
+         name: docker-manager
+         network: swarm_private
+         security_groups: swarm
+    - name: allocate floating ip to project and assign to docker-master
+      os_floating_ip:
+         auth:
+            auth_url: "{{ openstack_auth_endpoint }}"
+            username: "{{ openstack_user }}"
+            password: "{{ openstack_password }}"
+            project_name: "{{ project_name }}"
+         server: docker-manager
+         reuse: yes
+         fixed_network: swarm_private
+    - name: getting docker-master floating ip
+      os_server_facts:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         server: docker-manager
+    - name: get docker master public ip
+      set_fact: 
+         docker_public: "{{ openstack_servers.0.public_v4 }}"
+    - name: add docker master to local ansible inventory
+      add_host: 
+        name: "{{ docker_public }}" 
+        groups: docker 
+        ansible_ssh_user: "{{ image_user }}" 
+        ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+    - name: export environment variable if is ubuntu
+      local_action: shell export UBUNTU_MANAGER="{{ ubuntu_manager }}"
+    - name: export user variable
+      local_action: shell echo "export ansible_user={{ image_user }}" > env
+    - name: export host variable
+      local_action: shell echo "export host_name={{ docker_public }}" >> env
+    - name: create local ansible hosts file
+      local_action: shell echo "#This is a generate hosts file for ansible" > hosts
+    - name: deploy ubuntu workers
+      os_server:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         auto_ip: no
+         flavor: "{{ ubuntu_flavor }}"
+         image: "{{ ubuntu_image }}"
+         key_name: swarm_key
+         name: "{{ 'docker-ubuntu-worker-'+item }}"
+         network: swarm_private
+         security_groups: swarm
+      with_sequence: count="{{ ubuntu_number }}"
+      register: ub_wkr
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: creating ubuntu workers section
+      local_action: shell echo "[ubuntu-workers]" > hosts
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: register ubuntu workers to file
+      local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ ubuntu_user }} ansible_ssh_private_key_file=/home/{{ image_user }}/.ssh/{{ keypair.key.name }}" >> hosts
+      with_items: "{{ ub_wkr.results }}"
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: deploy centos workers
+      os_server:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         auto_ip: no
+         flavor: "{{ centos_flavor }}"
+         image: "{{ centos_image }}"
+         key_name: swarm_key
+         name: "{{ 'docker-centos-worker-'+item }}"
+         network: swarm_private
+         security_groups: swarm
+      with_sequence: count="{{ centos_number }}"
+      register: cnt_wkr
+      when: centos_workers == "y" or centos_workers == "Y"
+    - name: creating CentOS workers section
+      local_action: shell echo "[centos-workers]" >> hosts
+      when: centos_workers == "y" or centos_workers == "Y"
+    - name: register centos workers to file
+      local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ centos_user }} ansible_ssh_private_key_file=/home/{{ image_user }}/.ssh/{{ keypair.key.name }}" >> hosts
+      with_items: "{{ cnt_wkr.results }}"
+      when: centos_workers == "y" or centos_workers == "Y"
+    - name: add global section
+      local_action: shell echo "[workers:children]" >> hosts
+    - name: add ubuntu workers if present
+      local_action: shell echo "ubuntu-workers" >> hosts
+      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: add centos workers if present
+      local_action: shell echo "centos-workers" >> hosts
+      when: centos_workers == "y" or centos_workers == "Y"
+- name: including master playbook
+  include: master.yml

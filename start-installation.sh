@@ -94,6 +94,161 @@ compile_ansible_host(){
         stty echo #Enable again echo
     fi
 }
+
+install_ansible(){
+    if [[ ${PKG_MGR} == 'apt-get' ]]; then
+        $_ex "$REPO_MGR -y ppa:ansible/ansible;"
+    fi
+    $_ex "$PKG_MGR update -y; $PKG_MGR install -y ansible"
+}
+
+already_instantiated_cluster(){
+    read -p "What is the ip/dns name of remote docker-master? " host_name
+    export  host_name=${host_name}
+
+    read -p "What is the default user of docker-master? " ansible_user
+    export ansible_user=${ansible_user}
+
+    if check_binary ansible; then
+      read -p "is ansible host already configured with docker section which point to your docker-master node?[y/n] " already_configured
+      export already_configured=$already_configured
+      if check_answer $already_configured; then
+
+        echo "Double checking is better..."
+
+        if check_local_ansible; then
+          echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
+          exit 1
+        fi
+
+        echo "Everything configured"
+      else
+        echo "Configuring..."
+        $_ex 'echo "[docker]" >> /etc/ansible/hosts'
+
+        read -p "The connection with your master uses ssh key?[y/n] " ssh_present
+        export ssh_present=${ssh_present}
+        if check_answer $ssh_present; then
+            read -p "What is the name of remote docker-master key (with file extension)? " host_key
+            export host_key=${host_key}
+
+            read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+            if check_answer $loc_answer; then
+               export host_key_path=$HOME/.ssh
+            else
+               read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+               export host_key_path=${host_key_loc}
+            fi
+
+            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+        else
+            stty -echo
+            read -p "Please type ssh password (it will not be shown): " host_password
+            export host_password=${host_password}
+            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
+            stty echo
+        fi
+      fi
+    else
+      install_ansible
+      $_ex 'echo "[docker]" >> /etc/ansible/hosts'
+      read -p "The connection with your master uses ssh key?[y/n] " ssh_present
+      export ssh_present=${ssh_present}
+      if check_answer $ssh_present; then
+          read -p "What is the name of remote docker-master key (with file extension)? " host_key
+          export host_key=${host_key}
+
+          read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+          if check_answer $loc_answer; then
+             export host_key_path=$HOME/.ssh
+          else
+             read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+             export host_key_path=${host_key_loc}
+          fi
+          $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+      else
+          set +x
+          stty -echo
+          read -p "Please type ssh password (it will not be shown): " host_password
+          export host_password=${host_password}
+          $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
+          stty echo
+          set -x
+      fi
+    fi
+    echo "Preparing workers host file"
+    echo "#This is a generate hosts file for ansible" > hosts
+
+    read -p "Do you have Ubuntu workers?[y/n] " ubuntu_workers
+    export ubuntu_workers $ubuntu_workers
+    if check_answer $ubuntu_workers; then
+       echo "Compiling Ubuntu section"
+       echo "[ubuntu-workers]" >> hosts
+       read -p "How many Ubuntu workers you have? " workers_number
+       if check_is_number $workers_number; then
+         for i in $(seq 1 $workers_number); do
+            compile_ansible_host $i
+         done
+       fi
+    fi
+
+    read -p "Do you have CentOS workers?[y/n] " centos_workers
+    export centos_workers=$centos_workers
+    if check_answer $centos_workers; then
+       echo "Compiling CentOS section"
+       echo "[centos-workers]" >> hosts
+       read -p "How many CentOS workers you have? " workers_number
+       if check_is_number $workers_number; then
+         for i in $(seq 1 $workers_number); do
+            compile_ansible_host $i
+         done
+       fi
+    fi
+
+    echo "Adding last section"
+    echo "[workers:children]" >> hosts
+
+    if check_answer $ubuntu_workers; then
+       echo "ubuntu-workers" >> hosts
+    fi
+
+    if check_answer $centos_workers; then
+       echo "centos-workers" >> hosts
+    fi
+
+    read -p "Is docker master ubuntu?[y/n] " answer
+    if check_answer $answer; then #modify
+      export UBUNTU_MANAGER=y
+    fi
+
+    $_ex 'ansible-playbook master.yml'
+
+    if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
+       if check_binary sshpass; then
+          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+       else
+          $_ex "$PKG_MGR install  -y sshpass"
+          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+       fi
+    else
+       pass=$(echo $present | grep ansible_ssh_pass)
+       if [[ ! -z ${pass} ]]; then
+          pass=$(echo $present | grep -o ansible_ssh_pass.* | cut -f2 -d=)
+          if check_binary sshpass; then
+             continue
+          else
+             $_ex '$PKG_MGR install -y sshpass'
+          fi
+          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+       else
+          if [[ -z $host_key_path ]]; then
+              host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
+          fi
+          ssh -tt -i ${host_key_path} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+       fi
+    fi
+}
+
 #Execute command?
 _ex='sh -c'
 if [ "${USER}" != "root" ]; then
@@ -118,159 +273,34 @@ else
     exit 2
 fi
 
-echo "Creating docker cert directory"
+echo "Creating keys directory for copy"
+mkdir keys
+
+echo "Creating docker cert directory for docker master "
 mkdir certs
 
 echo "This script requires administrative privileges"
 $_ex 'echo "$USER" >> /dev/null'
 export current_user=$USER
 
-read -p "What is the ip/dns name of remote docker-master? " host_name
-export  host_name=${host_name}
+read -p "Did you already instantiated machine for swarm?[y/n] " required_openstack
+export required_openstack=${required_openstack}
 
-read -p "What is the default user of docker-master? " ansible_user
-export ansible_user=${ansible_user}
-
-if check_binary ansible; then
-  read -p "is ansible host already configured with docker section which point to your docker-master node?[y/n] " already_configured
-  export already_configured=$already_configured
-  if check_answer $already_configured; then
-  
-    echo "Double checking is better..."
+if check_answer ${required_openstack}; then
+    already_instantiated_cluster
+else
     
-    if check_local_ansible; then
-      echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
-      exit 1
+    if ! check_binary ansible; then
+        install_ansible
     fi
-
-    echo "Everything configured"
-  else
-    echo "Configuring..."
-    $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-
-    read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-    export ssh_present=${ssh_present}
-    if check_answer $ssh_present; then
-        read -p "What is the name of remote docker-master key (with file extension)? " host_key
-        export host_key=${host_key}
-
-        read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-        if check_answer $loc_answer; then
-           export host_key_path=$HOME/.ssh
-        else
-           read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-           export host_key_path=${host_key_loc}
-        fi
-
-        $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-    else
-        stty -echo
-        read -p "Please type ssh password (it will not be shown): " host_password
-        export host_password=${host_password}
-        $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
-        stty echo
-    fi
-  fi
-else
-  if [[ $PKG_MGR == 'apt-get' ]]; then
-  $_ex "$REPO_MGR -y ppa:ansible/ansible;" 
-  fi
-  $_ex "$PKG_MGR update -y; $PKG_MGR install -y ansible"
-  $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-  read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-  export ssh_present=${ssh_present}
-  if check_answer $ssh_present; then
-      read -p "What is the name of remote docker-master key (with file extension)? " host_key
-      export host_key=${host_key}
-
-      read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-      if check_answer $loc_answer; then
-         export host_key_path=$HOME/.ssh
-      else
-         read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-         export host_key_path=${host_key_loc}
-      fi
-      $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-  else
-      stty -echo
-      read -p "Please type ssh password (it will not be shown): " host_password
-      export host_password=${host_password}
-      $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
-      stty echo
-  fi
-fi
-
-echo "Preparing workers host file and folders"
-echo "#This is a generate hosts file for ansible" > hosts
-mkdir keys
-
-read -p "Do you have Ubuntu workers?[y/n] " ubuntu_workers
-export ubuntu_workers $ubuntu_workers
-if check_answer $ubuntu_workers; then
-   echo "Compiling Ubuntu section"
-   echo "[ubuntu-workers]" >> hosts
-   read -p "How many Ubuntu workers you have? " workers_number
-   if check_is_number $workers_number; then
-     for i in $(seq 1 $workers_number); do
-        compile_ansible_host $i
-     done
-   fi 
-fi
-
-read -p "Do you have CentOS workers?[y/n] " centos_workers
-export centos_workers=$centos_workers
-if check_answer $centos_workers; then
-   echo "Compiling CentOS section"
-   echo "[centos-workers]" >> hosts
-   read -p "How many CentOS workers you have? " workers_number
-   if check_is_number $workers_number; then
-     for i in $(seq 1 $workers_number); do
-        compile_ansible_host $i
-     done
-   fi
-fi
-
-echo "Adding last section"
-echo "[workers:children]" >> hosts
-
-if check_answer $ubuntu_workers; then
-   echo "ubuntu-workers" >> hosts
-fi
-
-if check_answer $centos_workers; then
-   echo "centos-workers" >> hosts
-fi
-
-read -p "Is docker master ubuntu?[y/n] " answer
-if check_answer $answer; then
-  $_ex 'ansible-playbook ubuntu.yml'
-fi
-
-$_ex 'ansible-playbook master.yml'
-
-if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
-   if check_binary sshpass; then
-      sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-   else
-      $_ex "$PKG_MGR install  -y sshpass"
-      sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-   fi
-else
-   pass=$(echo $present | grep ansible_ssh_pass)
-   if [[ ! -z ${pass} ]]; then
-      pass=$(echo $present | grep -o ansible_ssh_pass.* | cut -f2 -d=)
-      if check_binary sshpass; then
-         continue
-      else
-         $_ex '$PKG_MGR install -y sshpass'
-      fi
-      sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-   else
-      if [[ -z $host_key_path ]]; then
-          host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
-      fi
-      ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-   fi
+    $_ex 'ansible-playbook deploy_machines_openstack.yml'
+    source ./env
+    #if check_answer ${UBUNTU_MANAGER}; then
+    #    $_ex 'ansible-playbook ubuntu.yml'
+    #fi
+    #$_ex 'ansible-playbook master.yml'
+    $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
+    ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
 fi
 
 echo "Configuring local docker client"
@@ -282,10 +312,17 @@ fi
 cp certs/* $HOME/.docker/
 $_ex "chown -R $current_user:$current_user /home/$current_user/.docker/"
 
-export DOCKER_CERT_PATH=$HOME/.docker/
-export DOCKER_HOST=tcp://$host_name:2376
-export DOCKER_TLS_VERIFY=1 
+echo "Generating source file"
+echo "export DOCKER_CERT_PATH=$HOME/.docker/" > docker_remote
+echo "export DOCKER_HOST=tcp://$host_name:2376" >> docker_remote
+echo "export DOCKER_TLS_VERIFY=1" >> docker_remote
 
 echo "Cleaning up"
-$_ex 'rm -rf keys/'
+$_ex 'rm -rf keys/ certs/'
 $_ex 'rm hosts'
+
+if ! check_answer $required_openstack; then
+   $_ex 'rm env'
+fi
+
+echo "Everything should be properly configured, please run 'source(.)  docker_remote' in order to interact with remote swarm"

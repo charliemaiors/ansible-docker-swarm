@@ -1,3 +1,5 @@
+- include: ubuntu.yml
+
 - hosts: docker
   tasks:
     - name: enable epel-release
@@ -88,6 +90,7 @@
       with_items:
         - { src: keys/, dest: "{{ ansible_env.HOME }}/.ssh/" }
         - { src: hosts, dest: /etc/ansible/hosts }
+        - { src: ansible.cfg, dest: "{{ ansible_env.HOME }}" }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
         - { src: worker-ubuntu.yml, dest: "{{ ansible_env.HOME }}/worker-ubuntu.yml" }
         - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
