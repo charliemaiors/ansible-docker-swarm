@@ -99,7 +99,7 @@ install_ansible(){
     if [[ ${PKG_MGR} == 'apt-get' ]]; then
         $_ex "$REPO_MGR -y ppa:ansible/ansible;"
     fi
-        $_ex "$PKG_MGR update -y; $PKG_MGR install -y ansible"
+    $_ex "$PKG_MGR update -y; $PKG_MGR install -y ansible"
 }
 
 already_instantiated_cluster(){
@@ -225,10 +225,10 @@ already_instantiated_cluster(){
 
     if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
        if check_binary sshpass; then
-          sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        else
           $_ex "$PKG_MGR install  -y sshpass"
-          sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        fi
     else
        pass=$(echo $present | grep ansible_ssh_pass)
@@ -239,12 +239,12 @@ already_instantiated_cluster(){
           else
              $_ex '$PKG_MGR install -y sshpass'
           fi
-          sshpass -p "${host_password}" ssh ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        else
           if [[ -z $host_key_path ]]; then
               host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
           fi
-          ssh -tt -i ${host_key_path} ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          ssh -tt -i ${host_key_path} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        fi
     fi
 }
@@ -300,7 +300,7 @@ else
     #fi
     #$_ex 'ansible-playbook master.yml'
     $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
-    ssh -tt -i ${HOME}/.ssh/swarm_key ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+    ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
 fi
 
 echo "Configuring local docker client"
@@ -312,14 +312,17 @@ fi
 cp certs/* $HOME/.docker/
 $_ex "chown -R $current_user:$current_user /home/$current_user/.docker/"
 
-export DOCKER_CERT_PATH=$HOME/.docker/
-export DOCKER_HOST=tcp://$host_name:2376
-export DOCKER_TLS_VERIFY=1 
+echo "Generating source file"
+echo "export DOCKER_CERT_PATH=$HOME/.docker/" > docker_remote
+echo "export DOCKER_HOST=tcp://$host_name:2376" >> docker_remote
+echo "export DOCKER_TLS_VERIFY=1" >> docker_remote
 
 echo "Cleaning up"
-$_ex 'rm -rf keys/'
+$_ex 'rm -rf keys/ certs/'
 $_ex 'rm hosts'
 
 if ! check_answer $required_openstack; then
    $_ex 'rm env'
 fi
+
+echo "Everything should be properly configured, please run 'source(.)  docker_remote' in order to interact with remote swarm"
