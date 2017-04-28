@@ -28,10 +28,6 @@
       prompt: "What is the image name (or id) for instances (only ubuntu and centos are supported for now)?"
       default: "CentOS7"
       private: no
-    - name: ubuntu_manager
-      prompt: "Is your image Ubuntu or derived from it?[y/n]"
-      default: "n"
-      private: no
     - name: image_user
       prompt: "What is the default user for choosen image?"
       default: "centos"
@@ -264,8 +260,6 @@
         groups: docker 
         ansible_ssh_user: "{{ image_user }}" 
         ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
-    - name: export environment variable if is ubuntu
-      local_action: shell export UBUNTU_MANAGER="{{ ubuntu_manager }}"
     - name: export user variable
       local_action: shell echo "export ansible_user={{ image_user }}" > env
     - name: export host variable

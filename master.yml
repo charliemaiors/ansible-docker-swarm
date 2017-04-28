@@ -1,7 +1,28 @@
-- include: ubuntu.yml
-
 - hosts: docker
+  gather_facts: False
+  pre_tasks:
+    - name: Get the OS
+      raw: uname -a
+      register: distribution
+    - name: install-python 2 if ubuntu
+      become: yes
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)
+      when: "'ubuntu' in distribution.stdout"
+    - setup:
   tasks:
+     - name: Updating...
+      become: yes
+      apt:
+        update_cache: yes
+        upgrade: full
+      when:
+        - ansible_distribution == "Ubuntu"
+    - name: Add official ansible repository
+      become: yes
+      apt_repository:
+        repo: 'ppa:ansible/ansible'
+      when:
+        - ansible_distribution == "Ubuntu"
     - name: enable epel-release
       become: yes
       yum:
