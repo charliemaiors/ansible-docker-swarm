@@ -63,11 +63,11 @@
       shell: curl -sSL https://get.docker.com/ | sh
       args:
         executable: /bin/bash 
-    - name: enable docker without sudo
-      become: yes
-      shell: usermod -aG docker "{{ ansible_env.USER }}"
-      args:
-        executable: /bin/bash
+#    - name: enable docker without sudo
+#      become: yes
+#      shell: usermod -aG docker "{{ ansible_env.USER }}"
+#      args:
+#        executable: /bin/bash
     - name: create docker configuration directory
       become: yes
       file: path=/etc/systemd/system/docker.service.d state=directory
@@ -122,16 +122,19 @@
         state: restarted
         daemon-reload: yes
     - name: login on custom docker registry
+      become: yes
       docker_login:
         registry_url: https://dockerdemo.ddns.net
         username: demo
         password: demo
         reauthorize: yes
     - name: initialize docker swarm
+      become: yes
       shell: docker swarm init
       args:
         executable: /bin/bash
     - name: get worker join token
+      become: yes
       command: docker swarm join-token worker -q
       register: join_token
     - name: insert join token in ini file

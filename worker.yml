@@ -44,17 +44,18 @@
       shell: curl -sSL https://get.docker.com/ | sh
       args:
         executable: /bin/bash
-    - name: enable docker without sudo
-      become: yes
-      shell: usermod -aG docker "{{ ansible_env.USER }}"
-      args:
-        executable: /bin/bash
+#    - name: enable docker without sudo
+#      become: yes
+#      shell: usermod -aG docker "{{ ansible_env.USER }}"
+#      args:
+#        executable: /bin/bash
     - name: restart docker
       become: yes
       service:
         name: docker
         state: restarted
     - name: login on custom docker registry
+      become: yes
       docker_login:
         registry_url: https://dockerdemo.ddns.net
         username: demo
