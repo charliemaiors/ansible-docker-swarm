@@ -10,7 +10,7 @@
       when: "'ubuntu' in distribution.stdout"
     - setup:
   tasks:
-     - name: Updating...
+    - name: Updating...
       become: yes
       apt:
         update_cache: yes
