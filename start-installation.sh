@@ -216,11 +216,6 @@ already_instantiated_cluster(){
        echo "centos-workers" >> hosts
     fi
 
-    read -p "Is docker master ubuntu?[y/n] " answer
-    if check_answer $answer; then #modify
-      export UBUNTU_MANAGER=y
-    fi
-
     $_ex 'ansible-playbook master.yml'
 
     if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
