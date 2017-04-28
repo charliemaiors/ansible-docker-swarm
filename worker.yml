@@ -55,7 +55,6 @@
         name: docker
         state: restarted
     - name: login on custom docker registry
-      become: yes
       docker_login:
         registry_url: https://dockerdemo.ddns.net
         username: demo
