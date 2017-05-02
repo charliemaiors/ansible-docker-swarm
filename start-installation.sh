@@ -215,7 +215,7 @@ already_instantiated_cluster(){
     if check_answer $centos_workers; then
        echo "centos-workers" >> hosts
     fi
-
+    
     $_ex 'ansible-playbook master.yml'
 
     if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
