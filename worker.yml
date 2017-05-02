@@ -46,23 +46,23 @@
         executable: /bin/bash
     - name: enable docker without sudo
       become: yes
-      shell: usermod -aG docker "{{ ansible_env.USER }}"
-      args:
-        executable: /bin/bash
+      user: name="{{ ansible_env.USER }}" groups=docker append=yes
+    - name: Kill SSH
+      shell: sleep 1; pkill -u {{ ansible_ssh_user }} sshd
+      async: 3
+      poll: 2
     - name: restart docker
       become: yes
       service:
         name: docker
         state: restarted
     - name: login on custom docker registry
-      become: yes
       docker_login:
         registry_url: https://dockerdemo.ddns.net
         username: demo
         password: demo
         reauthorize: yes
     - name: join docker swarm
-      become: yes
       shell: "docker swarm join --token {{ swarm_join_token }} {{ swarm_manager_ip }}:2377"
       args:
         executable: /bin/bash 

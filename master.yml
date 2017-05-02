@@ -65,9 +65,11 @@
         executable: /bin/bash 
     - name: enable docker without sudo
       become: yes
-      shell: usermod -aG docker "{{ ansible_env.USER }}"
-      args:
-        executable: /bin/bash
+      user: name="{{ ansible_env.USER }}" groups=docker append=yes
+    - name: Kill SSH
+      shell: sleep 1; pkill -u {{ ansible_ssh_user }} sshd
+      async: 3
+      poll: 2  
     - name: create docker configuration directory
       become: yes
       file: path=/etc/systemd/system/docker.service.d state=directory
@@ -89,7 +91,7 @@
       command: chdir=/opt/docker {{ item }}
       with_items:
         - openssl genrsa -aes256 -passout pass:x -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=GB/ST=London/L=London/O=Global Security/OU=IT Department/CN=example.com"
+        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
         - openssl genrsa -out server-key.pem 4096
         - "openssl req -subj \"/CN={{ inventory_hostname }}\" -sha256 -new -key server-key.pem -out server.csr"
         - openssl x509 -req -days 365 -sha256 -passin pass:x -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
@@ -122,14 +124,12 @@
         state: restarted
         daemon-reload: yes
     - name: login on custom docker registry
-      become: yes
       docker_login:
         registry_url: https://dockerdemo.ddns.net
         username: demo
         password: demo
         reauthorize: yes
     - name: initialize docker swarm
-      become: yes
       shell: docker swarm init
       args:
         executable: /bin/bash

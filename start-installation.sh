@@ -215,7 +215,7 @@ already_instantiated_cluster(){
     if check_answer $centos_workers; then
        echo "centos-workers" >> hosts
     fi
-
+    
     $_ex 'ansible-playbook master.yml'
 
     if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
@@ -232,7 +232,7 @@ already_instantiated_cluster(){
           if check_binary sshpass; then
              continue
           else
-             $_ex '$PKG_MGR install -y sshpass'
+             $_ex "$PKG_MGR install -y sshpass"
           fi
           sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        else
@@ -300,15 +300,24 @@ fi
 
 echo "Configuring local docker client"
 
-if [ ! -d "$HOME/.docker" ]; then
-    mkdir -p $HOME/.docker
+if ! check_binary docker; then
+   if ! check_binary curl; then
+     $_ex "$PKG_MGR install -y curl"
+   fi
+   curl -sSL https://get.docker.com/ | sh
 fi
 
-cp certs/* $HOME/.docker/
+if [ ! -d "$HOME/.docker" ]; then
+    mkdir -p $HOME/.docker/${host_name}
+else
+    mkdir -p $HOME/.docker/${host_name}
+fi
+
+cp certs/* $HOME/.docker/${host_name}
 $_ex "chown -R $current_user:$current_user /home/$current_user/.docker/"
 
 echo "Generating source file"
-echo "export DOCKER_CERT_PATH=$HOME/.docker/" > docker_remote
+echo "export DOCKER_CERT_PATH=$HOME/.docker/$host_name" > docker_remote
 echo "export DOCKER_HOST=tcp://$host_name:2376" >> docker_remote
 echo "export DOCKER_TLS_VERIFY=1" >> docker_remote
 
