@@ -12,13 +12,13 @@
       prompt: "What is the openstack keystone auth endpoint?"
       default: "http://localhost:5000/v2"
       private: no
-    - name: public_network
-      prompt: "What is the name of the openstack public network?"
-      default: "public"
-      private: no
     - name: project_name
       prompt: "What is the project name where deploy the swarm?"
       default: "admin"
+      private: no
+    - name: public_network
+      prompt: "What is the name of the openstack public network?"
+      default: "public"
       private: no
     - name: flavor_name
       prompt: "What is the flavor name (or id) for instances?"

@@ -278,10 +278,10 @@ echo "This script requires administrative privileges"
 $_ex 'echo "$USER" >> /dev/null'
 export current_user=$USER
 
-read -p "Did you already instantiated machine for swarm?[y/n] " required_openstack
+read -p "Do you require also machine creation?[y/n] " required_openstack
 export required_openstack=${required_openstack}
 
-if check_answer ${required_openstack}; then
+if ! check_answer ${required_openstack}; then
     already_instantiated_cluster
 else
     
@@ -317,16 +317,22 @@ cp certs/* $HOME/.docker/${host_name}
 $_ex "chown -R $current_user:$current_user /home/$current_user/.docker/"
 
 echo "Generating source file"
-echo "export DOCKER_CERT_PATH=$HOME/.docker/$host_name" > docker_remote
-echo "export DOCKER_HOST=tcp://$host_name:2376" >> docker_remote
-echo "export DOCKER_TLS_VERIFY=1" >> docker_remote
+echo "export DOCKER_CERT_PATH=$HOME/.docker/$host_name" > $HOME/docker_remote
+echo "export DOCKER_HOST=tcp://$host_name:2376" >> $HOME/docker_remote
+echo "export DOCKER_TLS_VERIFY=1" >> $HOME/docker_remote
+
+read -p "Do you want to deploy portainer (http://portainer.io/) on your swarm?[y/n] " portainer
+export portainer=$portainer
+if check_answer $portainer; then
+    $_ex "ansible-playbook portainer.yml --extra-vars=\"openstack=$required_openstack\""
+fi
 
 echo "Cleaning up"
 $_ex 'rm -rf keys/ certs/'
 $_ex 'rm hosts'
 
-if ! check_answer $required_openstack; then
+if check_answer $required_openstack; then
    $_ex 'rm env'
 fi
 
-echo "Everything should be properly configured, please run 'source(.)  docker_remote' in order to interact with remote swarm"
+echo "Everything should be properly configured, please run 'source(.)  docker_remote' in your home directory ($HOME) in order to interact with remote swarm"
