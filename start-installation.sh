@@ -301,10 +301,14 @@ fi
 echo "Configuring local docker client"
 
 if ! check_binary docker; then
-   if ! check_binary curl; then
-     $_ex "$PKG_MGR install -y curl"
+   read -p "Docker is currently not installed do you want to install it?" docker_req
+   export docker_req=$docker_req
+   if check_answer $docker_req; then
+      if ! check_binary curl; then
+        $_ex "$PKG_MGR install -y curl"
+      fi
+      curl -sSL https://get.docker.com/ | sh
    fi
-   curl -sSL https://get.docker.com/ | sh
 fi
 
 if [ ! -d "$HOME/.docker" ]; then
