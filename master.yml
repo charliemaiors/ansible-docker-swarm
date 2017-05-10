@@ -175,5 +175,4 @@
 
 - name: include worker if all_floating
   include: worker.yml all_floating="{{ all_floating }}"
-  static: no
   when: all_floating == "y" or all_floating == "Y"
