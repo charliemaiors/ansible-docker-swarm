@@ -25,6 +25,7 @@
         repo: 'ppa:ansible/ansible'
       when:
         - ansible_distribution == "Ubuntu"
+        - all_floating == "n" or all_floating == "N"
     - name: enable epel-release
       become: yes
       yum:
@@ -32,30 +33,40 @@
         state: latest
       when:
         - ansible_distribution == "CentOS"
-    - name: installing packages centos
+    - name: installing mandatory packages centos
       become: yes
       yum: pkg={{item}} state=latest
       with_items:
         - curl
         - python
-        - git
         - python-pip
-        - ansible
         - openssl
       when:
         - ansible_distribution == "CentOS"
-    - name: installing packages ubuntu
+    - name: installing packages for only master exposed on centos
+      become: yes
+      yum: pkg={{item}} state=latest
+      with_items:
+        - git
+        - ansible
+      when: ansible_distrizzbution == "CentOS" and (all_floating == "n" or all_floating == "N")
+    - name: installing mandatory packages ubuntu
       become: yes
       apt: name={{item}} state=latest
       with_items:
         - curl
         - python
-        - git
         - python-pip
-        - ansible
         - openssl
       when:
         - (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian")
+    - name: installing packages for only master exposed on ubuntu
+      become: yes
+      apt: name={{item}} state=latest
+      with_items:
+        - git
+        - ansible
+      when: (ansible_distribution == "Ubuntu" or ansible_distribution == "Debian") and (all_floating == "n" or all_floating == "N")
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
@@ -98,8 +109,6 @@
       become: yes
       command: chdir=/opt/docker {{ item }}
       with_items:
-        - openssl genrsa -aes256 -passout pass:x -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
         - openssl genrsa -out server-key.pem 4096
         - "openssl req -subj \"/CN={{ inventory_hostname }}\" -sha256 -new -key server-key.pem -out server.csr"
         - openssl x509 -req -days 365 -sha256 -passin pass:x -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
@@ -115,7 +124,12 @@
         - { src: /opt/docker/ca.pem, dest: certs/ }
         - { src: /opt/docker/cert.pem, dest: certs/ }
         - { src: /opt/docker/key.pem, dest: certs/ }
-    - name: copy configuration files
+    - name: copy configuration file for docker daemon
+      become: yes
+      copy:
+        src: docker.conf
+        dest: /etc/systemd/system/docker.service.d/docker.conf
+    - name: copy files if nodes are not provisioned with floating ip
       become: yes
       copy: src={{ item.src }} dest={{ item.dest }}
       with_items:
@@ -124,7 +138,6 @@
         - { src: ansible.cfg, dest: "{{ ansible_env.HOME }}" }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
         - { src: worker-ubuntu.yml, dest: "{{ ansible_env.HOME }}/worker-ubuntu.yml" }
-        - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
     - name: restart docker and reload conf
       become: yes
       systemd:

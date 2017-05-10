@@ -294,8 +294,10 @@ else
     #    $_ex 'ansible-playbook ubuntu.yml'
     #fi
     #$_ex 'ansible-playbook master.yml'
-    $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
-    ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+    if ! check_answer ${all_floating}; then
+        $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
+        ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+    fi
 fi
 
 echo "Configuring local docker client"
