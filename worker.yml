@@ -8,7 +8,7 @@
         swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker') }}"
         swarm_manager_ip: "{{ lookup('ini', 'manager_ip section=docker file=worker') }}"
       when: all_floating == "n" or all_floating == "N"
-     - set_fact:
+    - set_fact:
         swarm_join_token: "{{ lookup('env', 'JOIN_TOKEN') }}"
         swarm_manager_ip: "{{ lookup('env', 'MASTER_IP') }}"
       when: all_floating == "y" or all_floating == "Y"
