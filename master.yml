@@ -49,7 +49,7 @@
       with_items:
         - git
         - ansible
-      when: ansible_distrizzbution == "CentOS" and (all_floating == "n" or all_floating == "N")
+      when: ansible_distribution == "CentOS" and (all_floating == "n" or all_floating == "N")
     - name: installing mandatory packages ubuntu
       become: yes
       apt: name={{item}} state=latest
