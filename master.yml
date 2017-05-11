@@ -49,7 +49,9 @@
       with_items:
         - git
         - ansible
-      when: ansible_distribution == "CentOS" and (all_floating == "n" or all_floating == "N")
+      when:
+        - ansible_distribution == "CentOS"
+        - all_floating == "n" or all_floating == "N"
     - name: installing mandatory packages ubuntu
       become: yes
       apt: name={{item}} state=latest
@@ -66,7 +68,9 @@
       with_items:
         - git
         - ansible
-      when: (ansible_distribution == "Ubuntu" or ansible_distribution == "Debian") and (all_floating == "n" or all_floating == "N")
+      when:
+        - ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+        - all_floating == "n" or all_floating == "N"
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
@@ -172,7 +176,3 @@
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
       when: all_floating == "n" or all_floating == "N"
-
-- name: include worker if all_floating
-  include: worker.yml all_floating="{{ all_floating }}"
-  when: all_floating == "y" or all_floating == "Y"
