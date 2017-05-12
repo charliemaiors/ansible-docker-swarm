@@ -1,7 +1,7 @@
 - hosts: docker
-  gather_facts: False
   vars:
     all_floating: "n"
+  gather_facts: False
   pre_tasks:
     - name: Get the OS
       raw: uname -a
@@ -9,7 +9,7 @@
     - name: install-python 2 if ubuntu
       become: yes
       raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)
-      when: "'ubuntu' in distribution.stdout"
+      when: "'Ubuntu' in distribution.stdout"
     - setup:
   tasks:
     - name: Updating...
@@ -23,9 +23,7 @@
       become: yes
       apt_repository:
         repo: 'ppa:ansible/ansible'
-      when:
-        - ansible_distribution == "Ubuntu"
-        - all_floating == "n" or all_floating == "N"
+      when: (ansible_distribution == "Ubuntu") and (all_floating == "n")
     - name: enable epel-release
       become: yes
       yum:

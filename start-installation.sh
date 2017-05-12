@@ -288,7 +288,10 @@ else
     if ! check_binary ansible; then
         install_ansible
     fi
-    $_ex 'ansible-playbook deploy_machines_openstack.yml'
+    read -p "Do you want to deploy all instances with a floating ip?[y/n] " all_floating
+    export all_floating=${all_floating}
+
+    $_ex "ansible-playbook deploy_machines_openstack.yml -e \"all_floating=${all_floating}\""
     source ./env
     #if check_answer ${UBUNTU_MANAGER}; then
     #    $_ex 'ansible-playbook ubuntu.yml'
@@ -334,11 +337,17 @@ if check_answer $portainer; then
 fi
 
 echo "Cleaning up"
-$_ex 'rm -rf keys/ certs/'
-$_ex 'rm hosts'
+
 
 if check_answer $required_openstack; then
    $_ex 'rm env'
+   if ! check_answer ${all_floating}; then
+     $_ex 'rm -rf keys/ certs/'
+     $_ex 'rm hosts'
+   fi
+else
+  $_ex 'rm -rf keys/ certs/'
+  $_ex 'rm hosts'
 fi
 
 echo "Everything should be properly configured, please run 'source(.)  docker_remote' in your home directory ($HOME) in order to interact with remote swarm"
