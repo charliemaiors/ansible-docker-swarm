@@ -291,6 +291,8 @@ else
     read -p "Do you want to deploy all instances with a floating ip?[y/n] " all_floating
     export all_floating=${all_floating}
 
+    echo "Installing playbook prerequisite"
+    $_ex 'pip install shade'
     $_ex "ansible-playbook deploy_machines_openstack.yml -e \"all_floating=${all_floating}\""
     source ./env
     #if check_answer ${UBUNTU_MANAGER}; then
