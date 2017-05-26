@@ -95,6 +95,15 @@ compile_ansible_host(){
     fi
 }
 
+install_pip_prerequisite(){
+    exist=$(pip freeze | grep $1)
+    if [ -z $exist ]; then
+       $_ex "pip install $1"
+    else
+       echo "$1 already installed"
+    fi
+}
+
 install_ansible(){
     if [[ ${PKG_MGR} == 'apt-get' ]]; then
         $_ex "$REPO_MGR -y ppa:ansible/ansible;"
@@ -292,7 +301,7 @@ else
     export all_floating=${all_floating}
 
     echo "Installing playbook prerequisite"
-    $_ex 'pip install shade'
+    install_pip_prerequisite shade
     $_ex "ansible-playbook deploy_machines_openstack.yml -e \"all_floating=${all_floating}\""
     source ./env
     #if check_answer ${UBUNTU_MANAGER}; then
