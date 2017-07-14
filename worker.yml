@@ -27,7 +27,6 @@
         - python
         - git
         - python-pip
-        - ansible
       when:
         - ansible_distribution == "CentOS"
     - name: installing packages ubuntu
@@ -38,7 +37,6 @@
         - python
         - git
         - python-pip
-        - ansible
       when:
         - (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian")
     - name: install docker-py
