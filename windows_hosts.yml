@@ -8,7 +8,7 @@
       win_copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
-      with_items:
+      with_items: #https://dockermsft.blob.core.windows.net/dockercontainer/docker-17-03-1-ee.zip
         - { src: docker1.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker1.ps1" }
         - { src: docker2.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker2.ps1" }
         - { src: docker3.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker3.ps1" }
