@@ -6,14 +6,18 @@
         state: present
     - name: Copy remote powershell script
       win_copy:
-        src: {{ item.src }} 
-        dest: {{ item.dest }}
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
       with_items:
         - { src: docker1.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker1.ps1" }
         - { src: docker2.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker2.ps1" }
         - { src: docker3.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker3.ps1" }
     - name: Execute docker1 install script
       win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker1.ps1 >> {{ ansible_env.USERPROFILE }}\\log1.txt"
+    - name: Execute docker1 install script
+      win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker2.ps1 >> {{ ansible_env.USERPROFILE }}\\log2.txt"
+    - name: Execute docker1 install script
+      win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker3.ps1 >> {{ ansible_env.USERPROFILE }}\\log3.txt"
     - name: Start docker service   #Start-Service docker
       win_service:
         name: docker
