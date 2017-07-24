@@ -14,16 +14,19 @@
         - { src: docker3.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker3.ps1" }
     - name: Execute docker1 install script
       win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker1.ps1 >> {{ ansible_env.USERPROFILE }}\\log1.txt"
-    - name: Execute docker1 install script
+    - name: Execute docker2 install script
       win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker2.ps1 >> {{ ansible_env.USERPROFILE }}\\log2.txt"
-    - name: Execute docker1 install script
+    - name: Execute docker3 install script
       win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker3.ps1 >> {{ ansible_env.USERPROFILE }}\\log3.txt"
+    - name: Pause execution
+      pause:
+        seconds: 40
+    - name: Reboot target machine
+      win_reboot:
+        shutdown_timeout_sec: 3600
+        reboot_timeout_sec: 3600
     - name: Start docker service   #Start-Service docker
       win_service:
         name: docker
         state: started
         start_mode: auto
-    - name: Reboot target machine
-      win_reboot:
-        shutdown_timeout_sec: 3600
-        reboot_timeout_sec: 3600
