@@ -4,28 +4,24 @@
       win_feature:
         name: Containers
         state: present
-    - name: Copy remote powershell script
-      win_copy:
-        src: "{{ item.src }}"
-        dest: "{{ item.dest }}"
-      with_items: #https://dockermsft.blob.core.windows.net/dockercontainer/docker-17-03-1-ee.zip
-        - { src: docker1.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker1.ps1" }
-        - { src: docker2.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker2.ps1" }
-        - { src: docker3.ps1, dest: "{{ ansible_env.USERPROFILE }}\\docker3.ps1" }
-    - name: Execute docker1 install script
-      win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker1.ps1 >> {{ ansible_env.USERPROFILE }}\\log1.txt"
-    - name: Execute docker2 install script
-      win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker2.ps1 >> {{ ansible_env.USERPROFILE }}\\log2.txt"
-    - name: Execute docker3 install script
-      win_command: "powershell {{ ansible_env.USERPROFILE }}\\docker3.ps1 >> {{ ansible_env.USERPROFILE }}\\log3.txt"
-    - name: Pause execution
-      pause:
-        seconds: 40
+    - name: Copy remote docker zip
+      win_get_url:
+        url: https://download.docker.com/components/engine/windows-server/17.03/docker-17.03.0-ee.zip
+        dest: "{{ ansible_env.USERPROFILE }}\\docker.zip"
+    - name: Expand archive
+      win_unzip:
+        src: "{{ ansible_env.USERPROFILE }}\\docker.zip"
+        dest: "C:\\Program\ Files"
+        rm: True
+    - name: Add docker to Windows Path
+      win_shell: $newPath = "$env:ProgramFiles\docker;" + [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::Machine); [Environment]::SetEnvironmentVariable("PATH", $newPath,[EnvironmentVariableTarget]::Machine)
+    - name: Register Docker service
+      win_shell: dockerd --register-service
     - name: Reboot target machine
       win_reboot:
         shutdown_timeout_sec: 3600
         reboot_timeout_sec: 3600
-    - name: Start docker service   #Start-Service docker
+    - name: Start Docker Service
       win_service:
         name: docker
         state: started
