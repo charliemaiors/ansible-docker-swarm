@@ -1,6 +1,8 @@
 - hosts: docker
   vars:
     all_floating: "n"
+    windows_workers: "n"
+    winrm_transport: "basic"
   gather_facts: False
   pre_tasks:
     - name: Get the OS
@@ -72,6 +74,11 @@
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
+      args:
+        executable: /bin/bash
+    - name: install pywinrm for windows workers
+      become: yes
+      shell: pip install 'pywinrm>=0.2.2'
       args:
         executable: /bin/bash
     - name: install docker engine

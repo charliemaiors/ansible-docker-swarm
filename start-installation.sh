@@ -60,6 +60,49 @@ compile_ansible_host(){
     read -p "What is the default user of worker $1 ? " worker_user
     export worker_user=${worker_user}
 
+    if [ $2 = true ]; then
+        compile_linux_ansible_host $host_ip $worker_user
+    else
+        compile_windows_ansible_host $host_ip $worker_user
+    fi
+}
+
+compile_windows_ansible_host(){
+    read -p "Which schema uses winrm connection?[http/https]" winrm_https
+    export winrm_https=${winrm_https}
+
+    if [ ${winrm_https} != "http"] && [ ${winrm_https} != "https" ]; then
+        echo "Invalid winrm scheme, aborting..."
+        exit 3
+    fi
+
+    read -p "Which port is settled up for winrm? " winrm_port
+    export winrm_port=${winrm_port}
+    check_is_number $winrm_port
+
+    stty -echo #Password will not be echoed
+    read -p "Which is the account password ?" winrm_password
+    export winrm_password=${winrm_password}
+    stty echo
+
+    read -p "Which authentication scheme are you using?[Kerberos, NTLM, Basic, CredSSP]" winrm_transport
+    export winrm_transport=${winrm_transport}
+
+    if [ ${winrm_transport} == "Kerberos" ] || [ ${winrm_transport} == "kerberos" ]; then
+       get_kerberos_variables
+       #Kerberos entries will be echoed here to hosts file
+    else
+        $_ex "$1 ansible_connection=winrm ansible_user=$2 ansible_password=${winrm_password} ansible_port=${winrm_port} ansible_winrm_server_cert_validation=ignore ansible_winrm_scheme=${winrm_https} ansible_winrm_transport=${winrm_transport}"
+    fi 
+}
+
+get_kerberos_variables(){
+    echo "Kerberos support is still in development for now use a different one"
+    exit 2
+}
+
+compile_linux_ansible_host(){
+
     read -p "The connection with your worker uses ssh key?[y/n] " ssh_worker_present
     export ssh_worker_present=${ssh_worker_present}
 
@@ -71,14 +114,14 @@ compile_ansible_host(){
         if check_answer ${workers_loc_answer}; then
             $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/' # If user can't modify current folder this script is already terminated
         else
-            read -p "The private key is already in place in remote ${worker_user}/.ssh folder?[y/n] " workers_loc_answer
+            read -p "The private key is already in place in remote $2/.ssh folder?[y/n] " workers_loc_answer
             if check_answer ${workers_loc_answer}; then
                 echo "Nothing to copy, key is already in place"
             else
                 read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
                 if check_answer ${workers_loc_answer}; then #Are you kidding me????
                     read -p "Please write the absolute REMOTE path (without the key name): " remote_path
-                    $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts'
+                    $_ex "echo \"$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}\" >> hosts"
                     continue
                 else
                     read -p "Please enter the absolute LOCAL path (without key name): " local_path
@@ -86,11 +129,11 @@ compile_ansible_host(){
                 fi
             fi
         fi
-        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
+        echo "$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
     else
         stty -echo #Aavoid to display password
         read -p "Which is your host password? " host_worker_password
-        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_worker_password}" >> hosts
+        echo "$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_pass=${host_worker_password}" >> hosts
         stty echo #Enable again echo
     fi
 }
@@ -196,7 +239,7 @@ already_instantiated_cluster(){
        read -p "How many Ubuntu workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i
+            compile_ansible_host $i false
          done
        fi
     fi
@@ -209,9 +252,22 @@ already_instantiated_cluster(){
        read -p "How many CentOS workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i
+            compile_ansible_host $i false
          done
        fi
+    fi
+
+    read -p "Do you have Windows Server workers?[y/n]" windows_workers
+    export windows_workers=${windows_workers}
+    if check_answer ${windows_workers}; then
+        echo "Compiling Windows Section"
+        echo "[windows-workers]" >> hosts
+        read -p "How many Windows Server workers you have? " workers_number
+        if check_is_number ${workers_number}; then
+            for i in $(seq 1 $workers_number); do
+             compile_ansible_host $i true
+            done
+        fi
     fi
 
     echo "Adding last section"
@@ -225,6 +281,10 @@ already_instantiated_cluster(){
        echo "centos-workers" >> hosts
     fi
     
+    if check_answer ${windows_workers}; then
+         echo "windows-workers" >> hosts
+    fi
+
     $_ex 'ansible-playbook master.yml'
 
     if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
