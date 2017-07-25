@@ -26,3 +26,9 @@
         name: docker
         state: started
         start_mode: auto
+    - name: Install Python
+      win_chocolatey:
+        name: python
+        state: latest
+    - name: Install docker-py
+      win_shell: pip install docker-py
