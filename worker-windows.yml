@@ -1,4 +1,4 @@
-- hosts: windows
+- hosts: windows-workers
   tasks:
     - name: Enable Windows Container Feature
       win_feature:
