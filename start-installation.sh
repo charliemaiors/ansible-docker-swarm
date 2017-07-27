@@ -1,5 +1,5 @@
 #! /bin/bash
-	
+
 set -x 
 
 isnumber='^[0-9]+$'
@@ -33,8 +33,7 @@ check_is_number() {
   fi
 }
 
-check_local_ansible(){ #Uses negative logic
-    
+check_local_ansible(){ #Uses negative logic    
     host_configured=$(cat /etc/ansible/hosts | grep $host_name)
     if [ ! -z ${host_configured+x} ];then
        user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d= | awk '{print $1}')
@@ -71,7 +70,7 @@ compile_windows_ansible_host(){
     read -p "Which schema uses winrm connection?[http/https]" winrm_https
     export winrm_https=${winrm_https}
 
-    if [ ${winrm_https} != "http"] && [ ${winrm_https} != "https" ]; then
+    if [ ${winrm_https} != "http" ] && [ ${winrm_https} != "https" ]; then
         echo "Invalid winrm scheme, aborting..."
         exit 3
     fi
@@ -79,11 +78,13 @@ compile_windows_ansible_host(){
     read -p "Which port is settled up for winrm? " winrm_port
     export winrm_port=${winrm_port}
     check_is_number $winrm_port
-
+    
+    set +x
     stty -echo #Password will not be echoed
     read -p "Which is the account password ?" winrm_password
     export winrm_password=${winrm_password}
     stty echo
+    set -x
 
     read -p "Which authentication scheme are you using?[Kerberos, NTLM, Basic, CredSSP]" winrm_transport
     export winrm_transport=${winrm_transport}
@@ -92,7 +93,10 @@ compile_windows_ansible_host(){
        get_kerberos_variables
        #Kerberos entries will be echoed here to hosts file
     else
+        echo "Updating host file"
+        set +x
         $_ex "$1 ansible_connection=winrm ansible_user=$2 ansible_password=${winrm_password} ansible_port=${winrm_port} ansible_winrm_server_cert_validation=ignore ansible_winrm_scheme=${winrm_https} ansible_winrm_transport=${winrm_transport}"
+       set -x
     fi 
 }
 
@@ -239,7 +243,7 @@ already_instantiated_cluster(){
        read -p "How many Ubuntu workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i false
+            compile_ansible_host $i true
          done
        fi
     fi
@@ -252,7 +256,7 @@ already_instantiated_cluster(){
        read -p "How many CentOS workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i false
+            compile_ansible_host $i true
          done
        fi
     fi
@@ -265,7 +269,7 @@ already_instantiated_cluster(){
         read -p "How many Windows Server workers you have? " workers_number
         if check_is_number ${workers_number}; then
             for i in $(seq 1 $workers_number); do
-             compile_ansible_host $i true
+             compile_ansible_host $i false
             done
         fi
     fi
