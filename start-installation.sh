@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/env bash
 
 set -x 
 
@@ -50,6 +50,47 @@ check_local_ansible(){ #Uses negative logic
        fi
     fi
     return 0
+}
+
+compile_ansible_master(){
+    $_ex 'echo "[docker]" >> /etc/ansible/hosts'
+
+    read -p "The connection with your master uses ssh key?[y/n] " ssh_present
+    export ssh_present=${ssh_present}
+    if check_answer $ssh_present; then
+        read -p "What is the name of remote docker-master key (with file extension)? " host_key
+        export host_key=${host_key}
+
+        read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+        if check_answer $loc_answer; then
+            export host_key_path=$HOME/.ssh
+        else
+            read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+            export host_key_path=${host_key_loc}
+        fi
+        read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if check_answer $sudo_password_mandatory; then
+            set +x
+            stty -echo
+            read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+            export remote_host_password=$remote_host_password
+            $_ex "echo \"${host_name} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
+            stty echo
+            set -x
+        else 
+            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+        fi
+    else
+        set +x
+        stty -echo
+        read -p "Please type ssh password (it will not be shown): " host_password
+        export host_password=${host_password}
+        $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
+        stty echo
+        set -x
+    fi
 }
 
 compile_ansible_host(){
@@ -180,30 +221,6 @@ already_instantiated_cluster(){
         echo "Everything configured"
       else
         echo "Configuring..."
-        $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-
-        read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-        export ssh_present=${ssh_present}
-        if check_answer $ssh_present; then
-            read -p "What is the name of remote docker-master key (with file extension)? " host_key
-            export host_key=${host_key}
-
-            read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-            if check_answer $loc_answer; then
-               export host_key_path=$HOME/.ssh
-            else
-               read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-               export host_key_path=${host_key_loc}
-            fi
-
-            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-        else
-            stty -echo
-            read -p "Please type ssh password (it will not be shown): " host_password
-            export host_password=${host_password}
-            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
-            stty echo
-        fi
       fi
     else
       install_ansible
