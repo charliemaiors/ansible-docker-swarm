@@ -394,7 +394,7 @@ already_instantiated_cluster(){
          echo "windows-workers" >> hosts
     fi
 
-    $_ex 'ansible-playbook master.yml'
+    $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic}"'
 
     if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
        if check_binary sshpass; then

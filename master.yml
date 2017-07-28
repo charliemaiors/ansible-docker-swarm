@@ -81,6 +81,22 @@
       shell: pip install 'pywinrm>=0.2.2'
       args:
         executable: /bin/bash
+      when:
+        - windows_workers == "y"
+    - name: install pywinrm[kerberos] for windows workers
+      become: yes
+      shell: pip install 'pywinrm[kerberos]'
+      args:
+        executable: /bin/bash
+      when:
+        - windows_workers == "y" and winrm_transport="kerberos"
+    - name: install pywinrm[credssp] for windows workers
+      become: yes
+      shell: pip install 'pywinrm[credssp]'
+      args:
+        executable: /bin/bash
+      when:
+        - windows_workers == "y" and winrm_transport="credssp"
     - name: install docker engine
       shell: curl -sSL https://get.docker.com/ | sh
       args:
