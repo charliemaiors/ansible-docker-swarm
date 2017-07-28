@@ -308,6 +308,7 @@ already_instantiated_cluster(){
         echo "Everything configured"
       else
         echo "Configuring..."
+        compile_ansible_master
       fi
     else
       install_ansible
