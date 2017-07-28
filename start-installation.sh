@@ -71,7 +71,7 @@ compile_ansible_master(){
         read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
         export sudo_password_mandatory=$sudo_password_mandatory
 
-        if check_answer $sudo_password_mandatory; then
+        if ! check_answer $sudo_password_mandatory; then
             set +x
             stty -echo
             read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
@@ -87,9 +87,35 @@ compile_ansible_master(){
         stty -echo
         read -p "Please type ssh password (it will not be shown): " host_password
         export host_password=${host_password}
-        $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
         stty echo
         set -x
+
+        read -p "Your remote user requires a password in order to execute sudo command?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if check_answer $sudo_password_mandatory; then
+            read -p "Are you using a different password in order to become a super user?" different_password
+            export different_password=$different_password
+            if check_answer $different_password; then    
+                set +x
+                stty -echo
+                read -p "Please type your become password, il will not be logged or sent and also will not be echoed: " remote_host_password
+                export remote_host_password=$remote_host_password
+                $_ex "echo \"${host_name} ansible_become_password=${remote_host_password} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+                stty echo
+                set -x
+            else
+                set +x
+                $_ex "echo \"${host_name} ansible_become_password=${host_password} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+                set -x
+            fi
+        else
+            set +x
+            stty -echo
+            $_ex "echo \"${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+            stty echo
+            set -x
+        fi
     fi
 }
 
@@ -132,7 +158,7 @@ compile_windows_ansible_host(){
 
     if [ ${winrm_transport} == "Kerberos" ] || [ ${winrm_transport} == "kerberos" ]; then
        get_kerberos_variables
-       #Kerberos entries will be echoed here to hosts file
+       #Kerberos entries will be echoed here to hosts file when support will be available
     else
         echo "Updating host file"
         set +x
@@ -176,10 +202,40 @@ compile_linux_ansible_host(){
         fi
         echo "$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
     else
+        set +x 
         stty -echo #Aavoid to display password
         read -p "Which is your host password? " host_worker_password
-        echo "$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_pass=${host_worker_password}" >> hosts
+        export host_worker_password=$host_worker_password
         stty echo #Enable again echo
+        set -x
+        
+        read -p "Your remote user requires a password in order to execute sudo command?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if check_answer $sudo_password_mandatory; then
+            read -p "Are you using a different password in order to become a super user?" different_password
+            export different_password=$different_password
+            if check_answer $different_password; then    
+                set +x
+                stty -echo
+                read -p "Please type your become password, il will not be logged or sent and also will not be echoed: " remote_host_password
+                export remote_host_password=$remote_host_password
+                $_ex "echo \"${1} ansible_become_password=${remote_host_password} ansible_connection=ssh ansible_user=${2} ansible_ssh_pass=${host_worker_password}\" >> /etc/ansible/hosts"
+                stty echo
+                set -x
+            else
+                set +x
+                $_ex "echo \"${1} ansible_become_password=${host_worker_password} ansible_connection=ssh ansible_user=${2} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+                set -x
+            fi
+        else
+            set +x
+            stty -echo
+            $_ex "echo \"${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_pass=${host_worker_password}\" >> /etc/ansible/hosts"
+            stty echo
+            set -x
+        fi        
+        
     fi
 }
 
