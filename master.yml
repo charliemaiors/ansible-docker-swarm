@@ -89,14 +89,14 @@
       args:
         executable: /bin/bash
       when:
-        - windows_workers == "y" and winrm_transport="kerberos"
+        - windows_workers == "y" and winrm_transport=="kerberos"
     - name: install pywinrm[credssp] for windows workers
       become: yes
       shell: pip install 'pywinrm[credssp]'
       args:
         executable: /bin/bash
       when:
-        - windows_workers == "y" and winrm_transport="credssp"
+        - windows_workers == "y" and winrm_transport=="credssp"
     - name: install docker engine
       shell: curl -sSL https://get.docker.com/ | sh
       args:
