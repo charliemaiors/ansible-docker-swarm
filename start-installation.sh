@@ -80,7 +80,7 @@ compile_ansible_master(){
             stty echo
             set -x
         else 
-            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
+            $_ex "echo \"${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
         fi
     else
         set +x
@@ -192,7 +192,23 @@ compile_linux_ansible_host(){
                 read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
                 if check_answer ${workers_loc_answer}; then #Are you kidding me????
                     read -p "Please write the absolute REMOTE path (without the key name): " remote_path
-                    $_ex "echo \"$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}\" >> hosts"
+
+                    read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+                    export sudo_password_mandatory=$sudo_password_mandatory
+
+                    if ! check_answer $sudo_password_mandatory; then
+                        set +x
+                        stty -echo
+                        read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+                        export remote_host_password=$remote_host_password
+
+                        echo "${1} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts
+                        stty echo
+                        set -x
+                    else 
+                        echo "${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts
+                    fi
+
                     continue
                 else
                     read -p "Please enter the absolute LOCAL path (without key name): " local_path
@@ -200,10 +216,25 @@ compile_linux_ansible_host(){
                 fi
             fi
         fi
-        echo "$1 ansible_connection=ssh ansible_user=$2 ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
+
+        read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if ! check_answer $sudo_password_mandatory; then
+            set +x
+            stty -echo
+            read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+            export remote_host_password=$remote_host_password
+
+            echo "${1} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=.ssh/${ssh_worker_key}" >> hosts
+            stty echo
+            set -x
+        else 
+            echo "${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=.ssh/${ssh_worker_key}" >> hosts
+        fi
     else
         set +x 
-        stty -echo #Aavoid to display password
+        stty -echo #Avoid to display password
         read -p "Which is your host password? " host_worker_password
         export host_worker_password=$host_worker_password
         stty echo #Enable again echo
