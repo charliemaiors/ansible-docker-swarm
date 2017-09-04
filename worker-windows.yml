@@ -6,7 +6,7 @@
         state: present
     - name: Copy remote docker zip
       win_get_url:
-        url: https://download.docker.com/components/engine/windows-server/17.03/docker-17.03.0-ee.zip
+        url: https://download.docker.com/components/engine/windows-server/17.06/docker-17.06.1-ee-2.zip 
         dest: "{{ ansible_env.USERPROFILE }}\\docker.zip"
     - name: Expand archive
       win_unzip:
