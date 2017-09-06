@@ -45,36 +45,32 @@
       shell: pip install 'docker-py>=1.7.0'
       args:
         executable: /bin/bash
+      when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "Centos")
     - name: install docker engine
       shell: curl -sSL https://get.docker.com/ | sh
       args:
         executable: /bin/bash
-      when:
-        - (ansbile_os_family == "RedHat") or (ansible_os_family == "Debian")
+      when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "Centos")
     - name: enable docker without sudo
       become: yes
       user: name="{{ ansible_env.USER }}" groups=docker append=yes
-      when:
-        - (ansbile_os_family == "RedHat") or (ansible_os_family == "Debian")
+      when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "Centos")
     - name: Kill SSH
       shell: sleep 1; pkill -u {{ ansible_ssh_user }} sshd
       async: 3
       poll: 2
-      when:
-        - (ansbile_os_family == "RedHat") or (ansible_os_family == "Debian")
+      when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "Centos")
     - name: restart docker
       become: yes
       service:
         name: docker
         state: restarted
-      when:
-        - (ansbile_os_family == "RedHat") or (ansible_os_family == "Debian")
+      when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "Centos")
     - name: join docker swarm
       shell: "docker swarm join --token {{ swarm_join_token }} {{ swarm_manager_ip }}:2377"
       args:
         executable: /bin/bash 
-      when:
-        - (ansbile_os_family == "RedHat") or (ansible_os_family == "Debian")
+      when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "Centos")
     - name: join docker swarm windows hosts
       win_shell: docker swarm join --token {{ swarm_join_token }} {{ swarm_manager_ip }}:2377
       when:

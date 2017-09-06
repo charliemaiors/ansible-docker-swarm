@@ -39,11 +39,14 @@ check_local_ansible(){ #Uses negative logic
        user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d= | awk '{print $1}')
        if [[ $user_configured != "" ]] && [[ $user_configured == $ansible_user ]]; then
            has_ssh=$(echo $host_configured | grep -o ansible_ssh_private_key_file.*)
-           if [ -z $has_ssh ]; then
+           if [ ! -z $has_ssh ]; then
+              export SSH_PRESENT="y"
               return 1
            else
               has_pass=$(echo $host_configured | grep -o ansible_ssh_pass.*)
-              if [ -z $has_pass ];then
+              if [ ! -z $has_pass ];then
+                 export SSH_PRESENT="n"
+                 export HOST_PASSWORD=$(echo $host_configured | grep -o ansible_ssh_pass.* | awk -F "=" '{print $2}')
                  return 1
               fi
            fi
@@ -56,8 +59,8 @@ compile_ansible_master(){
     $_ex 'echo "[docker]" >> /etc/ansible/hosts'
 
     read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-    export ssh_present=${ssh_present}
-    if check_answer $ssh_present; then
+    export SSH_PRESENT=${ssh_present}
+    if check_answer $SSH_PRESENT; then
         read -p "What is the name of remote docker-master key (with file extension)? " host_key
         export host_key=${host_key}
 
@@ -76,6 +79,7 @@ compile_ansible_master(){
             stty -echo
             read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
             export remote_host_password=$remote_host_password
+            export HOST_PASSWORD=$remote_host_password
             $_ex "echo \"${host_name} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
             stty echo
             set -x
@@ -87,6 +91,7 @@ compile_ansible_master(){
         stty -echo
         read -p "Please type ssh password (it will not be shown): " host_password
         export host_password=${host_password}
+        export HOST_PASSWORD=${host_password}
         stty echo
         set -x
 
@@ -162,7 +167,7 @@ compile_windows_ansible_host(){
     else
         echo "Updating host file"
         set +x
-        $_ex "$1 ansible_connection=winrm ansible_user=$2 ansible_password=${winrm_password} ansible_port=${winrm_port} ansible_winrm_server_cert_validation=ignore ansible_winrm_scheme=${winrm_https} ansible_winrm_transport=${winrm_transport}"
+        echo "$1 ansible_connection=winrm ansible_user=$2 ansible_password=${winrm_password} ansible_port=${winrm_port} ansible_winrm_server_cert_validation=ignore ansible_winrm_scheme=${winrm_https} ansible_winrm_transport=${winrm_transport}" >> hosts
        set -x
     fi 
 }
@@ -298,44 +303,21 @@ already_instantiated_cluster(){
       export already_configured=$already_configured
       if check_answer $already_configured; then
 
-        echo "Double checking is better..."
+      echo "Double checking is better..."
 
-        if check_local_ansible; then
-          echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
-          exit 1
-        fi
+      if check_local_ansible; then
+        echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
+        exit 1
+      fi
 
-        echo "Everything configured"
+      echo "Everything configured"
       else
         echo "Configuring..."
         compile_ansible_master
       fi
     else
       install_ansible
-      $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-      read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-      export ssh_present=${ssh_present}
-      if check_answer $ssh_present; then
-          read -p "What is the name of remote docker-master key (with file extension)? " host_key
-          export host_key=${host_key}
-
-          read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-          if check_answer $loc_answer; then
-             export host_key_path=$HOME/.ssh
-          else
-             read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-             export host_key_path=${host_key_loc}
-          fi
-          $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-      else
-          set +x
-          stty -echo
-          read -p "Please type ssh password (it will not be shown): " host_password
-          export host_password=${host_password}
-          $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
-          stty echo
-          set -x
-      fi
+      compile_ansible_master
     fi
     echo "Preparing workers host file"
     echo "#This is a generate hosts file for ansible" > hosts
@@ -396,12 +378,12 @@ already_instantiated_cluster(){
 
     $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic}"'
 
-    if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
+    if [ "${SSH_PRESENT}" = "n" -o "${SSH_PRESENT}" = "N" -o "${SSH_PRESENT}" = "No" ]; then
        if check_binary sshpass; then
-          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        else
           $_ex "$PKG_MGR install  -y sshpass"
-          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        fi
     else
        pass=$(echo $present | grep ansible_ssh_pass)

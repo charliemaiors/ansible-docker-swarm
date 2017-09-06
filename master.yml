@@ -98,6 +98,7 @@
       when:
         - windows_workers == "y" and winrm_transport=="credssp"
     - name: install docker engine
+      become: yes
       shell: curl -sSL https://get.docker.com/ | sh
       args:
         executable: /bin/bash 
@@ -163,6 +164,7 @@
         - { src: ansible.cfg, dest: "{{ ansible_env.HOME }}" }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
         - { src: worker-ubuntu.yml, dest: "{{ ansible_env.HOME }}/worker-ubuntu.yml" }
+        - { src: worker-windows.yml, dest: "{{ ansible_env.HOME }}/worker-windows.yml" }
     - name: restart docker and reload conf
       become: yes
       systemd:
