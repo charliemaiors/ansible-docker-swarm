@@ -1,0 +1,50 @@
+- name: deploy openfaas on swarm
+  hosts: docker
+  vars_prompt:
+    - name: openstack_user
+      prompt: "What is your openstack username?"
+      default: "admin"
+      private: no
+    - name: openstack_password
+      prompt: "What is your openstack password?"
+      private: yes
+    - name: openstack_auth_endpoint
+      prompt: "What is the openstack keystone auth endpoint?"
+      default: "http://localhost:5000/v2"
+      private: no
+    - name: project_name
+      prompt: "What is the project name where deploy the swarm?"
+      default: "admin"
+      private: no
+  tasks:
+    - name: enable openfaas port
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 8080
+        port_range_max: 8080
+        remote_ip_prefix: 0.0.0.0/0
+      when:
+        - openstack == "y"
+    - name: clone openfaas
+      git:
+        repo: https://github.com/alexellis/faas.git
+        dest: "{{ ansible_env.HOME }}/faas"
+    - name: deploy openfaas x86
+      shell: deploy_extended.sh
+      args:
+        chdir: "{{ ansible_env.HOME }}/faas"
+        executable: /bin/bash
+      when: ansible_architecture == "x86_64"
+    - name: deploy openfaas arm
+      shell: deploy_armhf.sh
+      args:
+        chdir: "{{ ansible_env.HOME }}/faas"
+        executable: /bin/bash
+      when: ansible_architecture == "armv7l"
+      

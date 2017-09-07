@@ -137,7 +137,7 @@
       with_items:
         - openssl genrsa -out server-key.pem 4096
         - "openssl req -subj \"/CN={{ inventory_hostname }}\" -sha256 -new -key server-key.pem -out server.csr"
-        - openssl x509 -req -days 365 -sha256 -passin pass:o0p3nssl -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
+        - openssl x509 -req -days 365 -sha256 -passin pass:0p3nssl -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
         - openssl genrsa -out key.pem 4096
         - openssl req -subj '/CN=client' -new -key key.pem -out client.csr
         - openssl x509 -req -days 365 -sha256 -passin pass:0p3nssl -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
