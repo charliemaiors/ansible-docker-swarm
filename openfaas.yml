@@ -42,7 +42,7 @@
         executable: /bin/bash
       when: ansible_architecture == "x86_64"
     - name: deploy openfaas arm
-      shell: ./deploy_armhf.sh
+      shell: ./deploy_stack.armhf.sh
       args:
         chdir: "{{ ansible_env.HOME }}/faas"
         executable: /bin/bash
