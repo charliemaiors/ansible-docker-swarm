@@ -322,12 +322,12 @@ already_instantiated_cluster(){
     echo "Preparing workers host file"
     echo "#This is a generate hosts file for ansible" > hosts
 
-    read -p "Do you have Ubuntu workers?[y/n] " ubuntu_workers
+    read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
     export ubuntu_workers $ubuntu_workers
     if check_answer $ubuntu_workers; then
        echo "Compiling Ubuntu section"
        echo "[ubuntu-workers]" >> hosts
-       read -p "How many Ubuntu workers you have? " workers_number
+       read -p "How many Ubuntu/Debian/Raspbian workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
             compile_ansible_host $i true
