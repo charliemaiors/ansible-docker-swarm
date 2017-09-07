@@ -129,18 +129,18 @@
       become: yes
       command: chdir=/opt/docker {{ item }}
       with_items:
-        - openssl genrsa -aes256 -passout pass:x -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
+        - openssl genrsa -aes256 -passout pass:0p3nssl -out ca-key.pem 4096
+        - openssl req -new -x509 -passin pass:0p3nssl -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
     - name: generate docker certificates
       become: yes
       command: chdir=/opt/docker {{ item }}
       with_items:
         - openssl genrsa -out server-key.pem 4096
         - "openssl req -subj \"/CN={{ inventory_hostname }}\" -sha256 -new -key server-key.pem -out server.csr"
-        - openssl x509 -req -days 365 -sha256 -passin pass:x -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
+        - openssl x509 -req -days 365 -sha256 -passin pass:o0p3nssl -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
         - openssl genrsa -out key.pem 4096
         - openssl req -subj '/CN=client' -new -key key.pem -out client.csr
-        - openssl x509 -req -days 365 -sha256 -passin pass:x -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
+        - openssl x509 -req -days 365 -sha256 -passin pass:0p3nssl -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
         - rm -v client.csr server.csr
         - chmod -v 0444 ca-key.pem key.pem server-key.pem
     - name: fetch client certificates
