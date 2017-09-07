@@ -36,13 +36,13 @@
         repo: https://github.com/alexellis/faas.git
         dest: "{{ ansible_env.HOME }}/faas"
     - name: deploy openfaas x86
-      shell: deploy_extended.sh
+      shell: ./deploy_extended.sh
       args:
         chdir: "{{ ansible_env.HOME }}/faas"
         executable: /bin/bash
       when: ansible_architecture == "x86_64"
     - name: deploy openfaas arm
-      shell: deploy_armhf.sh
+      shell: ./deploy_armhf.sh
       args:
         chdir: "{{ ansible_env.HOME }}/faas"
         executable: /bin/bash

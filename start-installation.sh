@@ -498,8 +498,13 @@ if check_answer $portainer; then
     $_ex "ansible-playbook portainer.yml --extra-vars=\"openstack=$required_openstack\""
 fi
 
-echo "Cleaning up"
+read -p "Do you want to deploy openfaas (http://portainer.io/) on your swarm?[y/n] " openfaas
+export openfaas=$openfaas                                                                    
+if check_answer $openfaas; then                                                               
+    $_ex "ansible-playbook openfaas.yml --extra-vars=\"openstack=$required_openstack\""       
+fi                                                                                             
 
+echo "Cleaning up"
 
 if check_answer $required_openstack; then
    $_ex 'rm env'
