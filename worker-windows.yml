@@ -1,0 +1,34 @@
+- hosts: windows-workers
+  tasks:
+    - name: Enable Windows Container Feature
+      win_feature:
+        name: Containers
+        state: present
+    - name: Copy remote docker zip
+      win_get_url:
+        url: https://download.docker.com/components/engine/windows-server/17.06/docker-17.06.1-ee-2.zip 
+        dest: "{{ ansible_env.USERPROFILE }}\\docker.zip"
+    - name: Expand archive
+      win_unzip:
+        src: "{{ ansible_env.USERPROFILE }}\\docker.zip"
+        dest: "C:\\Program\ Files"
+        rm: True
+    - name: Add docker to Windows Path
+      win_shell: $newPath = "$env:ProgramFiles\docker;" + [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::Machine); [Environment]::SetEnvironmentVariable("PATH", $newPath,[EnvironmentVariableTarget]::Machine)
+    - name: Register Docker service
+      win_shell: dockerd --register-service
+    - name: Reboot target machine
+      win_reboot:
+        shutdown_timeout_sec: 3600
+        reboot_timeout_sec: 3600
+    - name: Start Docker Service
+      win_service:
+        name: docker
+        state: started
+        start_mode: auto
+    - name: Install Python
+      win_chocolatey:
+        name: python
+        state: latest
+    - name: Install docker-py
+      win_shell: pip install docker-py
