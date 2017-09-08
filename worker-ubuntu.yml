@@ -3,7 +3,10 @@
   pre_tasks:
     - name: install-python 2 if ubuntu
       become: yes
-      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson)
+    - name: install aptitute if ubuntu
+      become: yes
+      raw: test -e /usr/bin/aptitude || (apt -y update && apt install -y aptitude)
     - setup:
   tasks:
     - name: Updating...

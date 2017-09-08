@@ -1,4 +1,8 @@
 - hosts: docker
+  vars:
+    all_floating: "n"
+    windows_workers: "n"
+    winrm_transport: "basic"
   gather_facts: False
   pre_tasks:
     - name: Get the OS
@@ -6,8 +10,12 @@
       register: distribution
     - name: install-python 2 if ubuntu
       become: yes
-      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)
-      when: "'ubuntu' in distribution.stdout"
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson)
+      when: "'Ubuntu' in distribution.stdout"
+    - name: install aptitude if ubuntu
+      become: yes
+      raw: test -e /usr/bin/aptitude || (apt -y update && apt install -y aptitude)
+      when: "'Ubuntu' in distribution.stdout"
     - setup:
   tasks:
     - name: Updating...
@@ -21,8 +29,7 @@
       become: yes
       apt_repository:
         repo: 'ppa:ansible/ansible'
-      when:
-        - ansible_distribution == "Ubuntu"
+      when: (ansible_distribution == "Ubuntu") and (all_floating == "n")
     - name: enable epel-release
       become: yes
       yum:
@@ -30,39 +37,84 @@
         state: latest
       when:
         - ansible_distribution == "CentOS"
-    - name: installing packages centos
+    - name: installing mandatory packages centos
       become: yes
       yum: pkg={{item}} state=latest
       with_items:
         - curl
         - python
-        - git
         - python-pip
-        - ansible
         - openssl
       when:
         - ansible_distribution == "CentOS"
-    - name: installing packages ubuntu
+    - name: installing packages for only master exposed on centos
+      become: yes
+      yum: pkg={{item}} state=latest
+      with_items:
+        - git
+        - ansible
+      when:
+        - ansible_distribution == "CentOS"
+        - all_floating == "n" or all_floating == "N"
+    - name: installing mandatory packages ubuntu
       become: yes
       apt: name={{item}} state=latest
       with_items:
         - curl
         - python
-        - git
         - python-pip
-        - ansible
         - openssl
       when:
         - (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian")
+    - name: installing packages for only master exposed on ubuntu
+      become: yes
+      apt: name={{item}} state=latest
+      with_items:
+        - git
+        - ansible
+      when:
+        - ansible_distribution == "Ubuntu" or ansible_distribution == "Debian"
+        - all_floating == "n" or all_floating == "N"
     - name: install docker-py
       become: yes
       shell: pip install 'docker-py>=1.7.0'
       args:
         executable: /bin/bash
-    - name: install docker engine
-      shell: curl -sSL https://get.docker.com/ | sh
+    - name: install pywinrm for windows workers
+      become: yes
+      shell: pip install 'pywinrm>=0.2.2'
       args:
-        executable: /bin/bash 
+        executable: /bin/bash
+      when:
+        - windows_workers == "y"
+    - name: install pywinrm[kerberos] for windows workers
+      become: yes
+      shell: pip install 'pywinrm[kerberos]'
+      args:
+        executable: /bin/bash
+      when:
+        - windows_workers == "y" and winrm_transport=="kerberos"
+    - name: install pywinrm[credssp] for windows workers
+      become: yes
+      shell: pip install 'pywinrm[credssp]'
+      args:
+        executable: /bin/bash
+      when:
+        - windows_workers == "y" and winrm_transport=="credssp"
+    - name: get docker script
+      become: yes
+      get_url: 
+        url: https://get.docker.com/
+        dest: "{{ ansible_env.HOME }}/docker.sh"
+    - name: Changing perm of docker script, adding "+x"
+      become: yes
+      file: dest="{{ ansible_env.HOME }}/docker.sh" mode=a+x
+    - name: install docker engine
+      become: yes
+      shell: ./docker.sh
+      args:
+        chdir: "{{ ansible_env.HOME }}"
+        executable: /bin/bash
     - name: enable docker without sudo
       become: yes
       user: name="{{ ansible_env.USER }}" groups=docker append=yes
@@ -81,23 +133,34 @@
       shell: "echo subjectAltName = IP:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
       args:
         executable: /bin/bash
+      when: cert_type == "ip"
+    - name: write server extfile
+      become: yes
+      shell: "echo subjectAltName = DNS:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
+      args:
+        executable: /bin/bash
+      when: cert_type == "dns"
     - name: write client extfile
       become: yes
       shell: echo extendedKeyUsage = clientAuth > /opt/docker/extfileClient.cnf
       args:
         executable: /bin/bash
+    - name: define docker CA
+      become: yes
+      command: chdir=/opt/docker {{ item }}
+      with_items:
+        - openssl genrsa -aes256 -passout pass:0p3nssl -out ca-key.pem 4096
+        - openssl req -new -x509 -passin pass:0p3nssl -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
     - name: generate docker certificates
       become: yes
       command: chdir=/opt/docker {{ item }}
       with_items:
-        - openssl genrsa -aes256 -passout pass:x -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:x -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
         - openssl genrsa -out server-key.pem 4096
         - "openssl req -subj \"/CN={{ inventory_hostname }}\" -sha256 -new -key server-key.pem -out server.csr"
-        - openssl x509 -req -days 365 -sha256 -passin pass:x -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
+        - openssl x509 -req -days 365 -sha256 -passin pass:0p3nssl -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile extfileServer.cnf
         - openssl genrsa -out key.pem 4096
         - openssl req -subj '/CN=client' -new -key key.pem -out client.csr
-        - openssl x509 -req -days 365 -sha256 -passin pass:x -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
+        - openssl x509 -req -days 365 -sha256 -passin pass:0p3nssl -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out cert.pem -extfile extfileClient.cnf
         - rm -v client.csr server.csr
         - chmod -v 0444 ca-key.pem key.pem server-key.pem
     - name: fetch client certificates
@@ -107,7 +170,12 @@
         - { src: /opt/docker/ca.pem, dest: certs/ }
         - { src: /opt/docker/cert.pem, dest: certs/ }
         - { src: /opt/docker/key.pem, dest: certs/ }
-    - name: copy configuration files
+    - name: copy configuration file for docker daemon
+      become: yes
+      copy:
+        src: docker.conf
+        dest: /etc/systemd/system/docker.service.d/docker.conf
+    - name: copy files if nodes are not provisioned with floating ip
       become: yes
       copy: src={{ item.src }} dest={{ item.dest }}
       with_items:
@@ -116,19 +184,13 @@
         - { src: ansible.cfg, dest: "{{ ansible_env.HOME }}" }
         - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
         - { src: worker-ubuntu.yml, dest: "{{ ansible_env.HOME }}/worker-ubuntu.yml" }
-        - { src: docker.conf, dest: /etc/systemd/system/docker.service.d/docker.conf }
+        - { src: worker-windows.yml, dest: "{{ ansible_env.HOME }}/worker-windows.yml" }
     - name: restart docker and reload conf
       become: yes
       systemd:
         name: docker
         state: restarted
         daemon-reload: yes
-    - name: login on custom docker registry
-      docker_login:
-        registry_url: https://dockerdemo.ddns.net
-        username: demo
-        password: demo
-        reauthorize: yes
     - name: initialize docker swarm
       shell: docker swarm init
       args:
@@ -137,15 +199,23 @@
       become: yes
       command: docker swarm join-token worker -q
       register: join_token
+    - name: export join token if all floating
+      local_action: command "export JOIN_TOKEN={{ join_token.stdout }}"
+      when: all_floating == "y" or all_floating == "Y"
+    - name: export master ip if all floating
+      local_action: command "export MASTER_IP={{ ansible_default_ipv4.address }}"
+      when: all_floating == "y" or all_floating == "Y"
     - name: insert join token in ini file
       ini_file:
         dest: "{{ ansible_env.HOME }}/worker"
         section: docker
         option: join_token
         value: "{{ join_token.stdout }}"
+      when: all_floating == "n" or all_floating == "N"
     - name: insert manager ip address in ini file
       ini_file:
         dest: "{{ ansible_env.HOME }}/worker"
         section: docker
         option: manager_ip
         value: "{{ ansible_default_ipv4.address }}"
+      when: all_floating == "n" or all_floating == "N"

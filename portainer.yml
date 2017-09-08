@@ -1,0 +1,37 @@
+- name: deploy portainer on swarm
+  hosts: localhost
+  vars_prompt:
+    - name: openstack_user
+      prompt: "What is your openstack username?"
+      default: "admin"
+      private: no
+    - name: openstack_password
+      prompt: "What is your openstack password?"
+      private: yes
+    - name: openstack_auth_endpoint
+      prompt: "What is the openstack keystone auth endpoint?"
+      default: "http://localhost:5000/v2"
+      private: no
+    - name: project_name
+      prompt: "What is the project name where deploy the swarm?"
+      default: "admin"
+      private: no
+  tasks:
+    - name: enable portainer port
+      os_security_group_rule:
+        auth:
+          auth_url: "{{ openstack_auth_endpoint }}"
+          username: "{{ openstack_user }}"
+          password: "{{ openstack_password }}"
+          project_name: "{{ project_name }}"
+        security_group: swarm
+        protocol: tcp
+        port_range_min: 9000
+        port_range_max: 9000
+        remote_ip_prefix: 0.0.0.0/0
+      when: 
+        - openstack == "y"
+    - name: deploy portainer on swarm
+      shell: "source {{ ansible_env.HOME }}/docker_remote && docker service create --name portainer --publish 9000:9000 --constraint 'node.role == manager' --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock portainer/portainer -H unix:///var/run/docker.sock"
+      args:
+        executable: /bin/bash

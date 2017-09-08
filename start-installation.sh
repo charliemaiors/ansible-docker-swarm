@@ -1,8 +1,44 @@
-#! /bin/bash
-	
+#! /usr/bin/env bash
+
 set -x 
 
 isnumber='^[0-9]+$'
+
+valid_ip(){
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+
+valid_fqdn(){
+    local fqdn=$1
+    local stat=1
+    
+    host $1 2>&1 > /dev/null 
+    stat=$?
+    
+    return $stat
+}
+
+check_in_system_host_file(){
+   local exist_host=$(cat /etc/hosts | grep $1)
+   
+   if [[ -z ${exist_host} ]]; then
+      return 1
+   else
+      return 0
+   fi
+}
 
 check_binary () {
   echo -n " * Checking for '$1' ... "
@@ -33,18 +69,20 @@ check_is_number() {
   fi
 }
 
-check_local_ansible(){ #Uses negative logic
-    
+check_local_ansible(){ #Uses negative logic    
     host_configured=$(cat /etc/ansible/hosts | grep $host_name)
     if [ ! -z ${host_configured+x} ];then
        user_configured=$(echo $host_configured | grep -o ansible_user.* | cut -f2 -d= | awk '{print $1}')
        if [[ $user_configured != "" ]] && [[ $user_configured == $ansible_user ]]; then
            has_ssh=$(echo $host_configured | grep -o ansible_ssh_private_key_file.*)
-           if [ -z $has_ssh ]; then
+           if [ ! -z $has_ssh ]; then
+              export SSH_PRESENT="y"
               return 1
            else
               has_pass=$(echo $host_configured | grep -o ansible_ssh_pass.*)
-              if [ -z $has_pass ];then
+              if [ ! -z $has_pass ];then
+                 export SSH_PRESENT="n"
+                 export HOST_PASSWORD=$(echo $host_configured | grep -o ansible_ssh_pass.* | awk -F "=" '{print $2}')
                  return 1
               fi
            fi
@@ -53,12 +91,129 @@ check_local_ansible(){ #Uses negative logic
     return 0
 }
 
+compile_ansible_master(){
+    $_ex 'echo "[docker]" >> /etc/ansible/hosts'
+
+    read -p "The connection with your master uses ssh key?[y/n] " ssh_present
+    export SSH_PRESENT=${ssh_present}
+    if check_answer $SSH_PRESENT; then
+        read -p "What is the name of remote docker-master key (with file extension)? " host_key
+        export host_key=${host_key}
+
+        read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
+        if check_answer $loc_answer; then
+            export host_key_path=$HOME/.ssh
+        else
+            read -p "Where is located docker-master ssh key?[only path] "host_key_loc
+            export host_key_path=${host_key_loc}
+        fi
+        read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if ! check_answer $sudo_password_mandatory; then
+            set +x
+            stty -echo
+            read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+            export remote_host_password=$remote_host_password
+            export HOST_PASSWORD=$remote_host_password
+            $_ex "echo \"${host_name} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
+            stty echo
+            set -x
+        else 
+            $_ex "echo \"${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
+        fi
+    else
+        set +x
+        stty -echo
+        read -p "Please type ssh password (it will not be shown): " host_password
+        export host_password=${host_password}
+        export HOST_PASSWORD=${host_password}
+        stty echo
+        set -x
+
+        read -p "Your remote user requires a password in order to execute sudo command?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if check_answer $sudo_password_mandatory; then
+            read -p "Are you using a different password in order to become a super user?" different_password
+            export different_password=$different_password
+            if check_answer $different_password; then    
+                set +x
+                stty -echo
+                read -p "Please type your become password, il will not be logged or sent and also will not be echoed: " remote_host_password
+                export remote_host_password=$remote_host_password
+                $_ex "echo \"${host_name} ansible_become_password=${remote_host_password} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+                stty echo
+                set -x
+            else
+                set +x
+                $_ex "echo \"${host_name} ansible_become_password=${host_password} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+                set -x
+            fi
+        else
+            set +x
+            stty -echo
+            $_ex "echo \"${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+            stty echo
+            set -x
+        fi
+    fi
+}
+
 compile_ansible_host(){
     read -p "Write the ip address or hostname of worker number $1: " host_ip
     export host_ip=${host_ip}
 
     read -p "What is the default user of worker $1 ? " worker_user
     export worker_user=${worker_user}
+
+    if [ $2 = true ]; then
+        compile_linux_ansible_host $host_ip $worker_user
+    else
+        compile_windows_ansible_host $host_ip $worker_user
+    fi
+}
+
+compile_windows_ansible_host(){
+    read -p "Which schema uses winrm connection?[http/https]" winrm_https
+    export winrm_https=${winrm_https}
+
+    if [ ${winrm_https} != "http" ] && [ ${winrm_https} != "https" ]; then
+        echo "Invalid winrm scheme, aborting..."
+        exit 3
+    fi
+
+    read -p "Which port is settled up for winrm? " winrm_port
+    export winrm_port=${winrm_port}
+    check_is_number $winrm_port
+    
+    set +x
+    stty -echo #Password will not be echoed
+    read -p "Which is the account password ?" winrm_password
+    export winrm_password=${winrm_password}
+    stty echo
+    set -x
+
+    read -p "Which authentication scheme are you using?[Kerberos, NTLM, Basic, CredSSP]" winrm_transport
+    export winrm_transport=${winrm_transport}
+
+    if [ ${winrm_transport} == "Kerberos" ] || [ ${winrm_transport} == "kerberos" ]; then
+       get_kerberos_variables
+       #Kerberos entries will be echoed here to hosts file when support will be available
+    else
+        echo "Updating host file"
+        set +x
+        echo "$1 ansible_connection=winrm ansible_user=$2 ansible_password=${winrm_password} ansible_port=${winrm_port} ansible_winrm_server_cert_validation=ignore ansible_winrm_scheme=${winrm_https} ansible_winrm_transport=${winrm_transport}" >> hosts
+       set -x
+    fi 
+}
+
+get_kerberos_variables(){
+    echo "Kerberos support is still in development for now use a different one"
+    exit 2
+}
+
+compile_linux_ansible_host(){
 
     read -p "The connection with your worker uses ssh key?[y/n] " ssh_worker_present
     export ssh_worker_present=${ssh_worker_present}
@@ -71,14 +226,30 @@ compile_ansible_host(){
         if check_answer ${workers_loc_answer}; then
             $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/' # If user can't modify current folder this script is already terminated
         else
-            read -p "The private key is already in place in remote ${worker_user}/.ssh folder?[y/n] " workers_loc_answer
+            read -p "The private key is already in place in remote $2/.ssh folder?[y/n] " workers_loc_answer
             if check_answer ${workers_loc_answer}; then
                 echo "Nothing to copy, key is already in place"
             else
                 read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
                 if check_answer ${workers_loc_answer}; then #Are you kidding me????
                     read -p "Please write the absolute REMOTE path (without the key name): " remote_path
-                    $_ex 'echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts'
+
+                    read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+                    export sudo_password_mandatory=$sudo_password_mandatory
+
+                    if ! check_answer $sudo_password_mandatory; then
+                        set +x
+                        stty -echo
+                        read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+                        export remote_host_password=$remote_host_password
+
+                        echo "${1} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts
+                        stty echo
+                        set -x
+                    else 
+                        echo "${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts
+                    fi
+
                     continue
                 else
                     read -p "Please enter the absolute LOCAL path (without key name): " local_path
@@ -86,12 +257,66 @@ compile_ansible_host(){
                 fi
             fi
         fi
-        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_private_key_file=~/.ssh/${ssh_worker_key}" >> hosts
+
+        read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if ! check_answer $sudo_password_mandatory; then
+            set +x
+            stty -echo
+            read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+            export remote_host_password=$remote_host_password
+
+            echo "${1} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=.ssh/${ssh_worker_key}" >> hosts
+            stty echo
+            set -x
+        else 
+            echo "${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=.ssh/${ssh_worker_key}" >> hosts
+        fi
     else
-        stty -echo #Aavoid to display password
+        set +x 
+        stty -echo #Avoid to display password
         read -p "Which is your host password? " host_worker_password
-        echo "${host_ip} ansible_connection=ssh ansible_user=${worker_user} ansible_ssh_pass=${host_worker_password}" >> hosts
+        export host_worker_password=$host_worker_password
         stty echo #Enable again echo
+        set -x
+        
+        read -p "Your remote user requires a password in order to execute sudo command?[y/n] " sudo_password_mandatory
+        export sudo_password_mandatory=$sudo_password_mandatory
+
+        if check_answer $sudo_password_mandatory; then
+            read -p "Are you using a different password in order to become a super user?" different_password
+            export different_password=$different_password
+            if check_answer $different_password; then    
+                set +x
+                stty -echo
+                read -p "Please type your become password, il will not be logged or sent and also will not be echoed: " remote_host_password
+                export remote_host_password=$remote_host_password
+                $_ex "echo \"${1} ansible_become_password=${remote_host_password} ansible_connection=ssh ansible_user=${2} ansible_ssh_pass=${host_worker_password}\" >> /etc/ansible/hosts"
+                stty echo
+                set -x
+            else
+                set +x
+                $_ex "echo \"${1} ansible_become_password=${host_worker_password} ansible_connection=ssh ansible_user=${2} ansible_ssh_pass=${host_password}\" >> /etc/ansible/hosts"
+                set -x
+            fi
+        else
+            set +x
+            stty -echo
+            $_ex "echo \"${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_pass=${host_worker_password}\" >> /etc/ansible/hosts"
+            stty echo
+            set -x
+        fi        
+        
+    fi
+}
+
+install_pip_prerequisite(){
+    exist=$(pip freeze | grep $1)
+    if [ -z $exist ]; then
+       $_ex "pip install $1"
+    else
+       echo "$1 already installed"
     fi
 }
 
@@ -106,6 +331,18 @@ already_instantiated_cluster(){
     read -p "What is the ip/dns name of remote docker-master? " host_name
     export  host_name=${host_name}
 
+    if valid_ip $host_name; then
+        export docker_cert="ip"
+    elif valid_fqdn $host_name; then
+        export docker_cert="dns"
+    elif check_in_system_host_file $host_name; then
+        export host_name=$(cat /etc/hosts | grep docker | awk '{print $1}') #check if someone put the hosts file alias as docker manager dns
+        export docker_cert="ip"
+    else
+        echo "$host_name is not valid, aborting..."
+        exit 2
+    fi
+
     read -p "What is the default user of docker-master? " ansible_user
     export ansible_user=${ansible_user}
 
@@ -114,80 +351,34 @@ already_instantiated_cluster(){
       export already_configured=$already_configured
       if check_answer $already_configured; then
 
-        echo "Double checking is better..."
+      echo "Double checking is better..."
 
-        if check_local_ansible; then
-          echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
-          exit 1
-        fi
+      if check_local_ansible; then
+        echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
+        exit 1
+      fi
 
-        echo "Everything configured"
+      echo "Everything configured"
       else
         echo "Configuring..."
-        $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-
-        read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-        export ssh_present=${ssh_present}
-        if check_answer $ssh_present; then
-            read -p "What is the name of remote docker-master key (with file extension)? " host_key
-            export host_key=${host_key}
-
-            read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-            if check_answer $loc_answer; then
-               export host_key_path=$HOME/.ssh
-            else
-               read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-               export host_key_path=${host_key_loc}
-            fi
-
-            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-        else
-            stty -echo
-            read -p "Please type ssh password (it will not be shown): " host_password
-            export host_password=${host_password}
-            $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
-            stty echo
-        fi
+        compile_ansible_master
       fi
     else
       install_ansible
-      $_ex 'echo "[docker]" >> /etc/ansible/hosts'
-      read -p "The connection with your master uses ssh key?[y/n] " ssh_present
-      export ssh_present=${ssh_present}
-      if check_answer $ssh_present; then
-          read -p "What is the name of remote docker-master key (with file extension)? " host_key
-          export host_key=${host_key}
-
-          read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-          if check_answer $loc_answer; then
-             export host_key_path=$HOME/.ssh
-          else
-             read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-             export host_key_path=${host_key_loc}
-          fi
-          $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}" >> /etc/ansible/hosts'
-      else
-          set +x
-          stty -echo
-          read -p "Please type ssh password (it will not be shown): " host_password
-          export host_password=${host_password}
-          $_ex 'echo "${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_pass=${host_password}" >> /etc/ansible/hosts'
-          stty echo
-          set -x
-      fi
+      compile_ansible_master
     fi
     echo "Preparing workers host file"
     echo "#This is a generate hosts file for ansible" > hosts
 
-    read -p "Do you have Ubuntu workers?[y/n] " ubuntu_workers
+    read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
     export ubuntu_workers $ubuntu_workers
     if check_answer $ubuntu_workers; then
        echo "Compiling Ubuntu section"
        echo "[ubuntu-workers]" >> hosts
-       read -p "How many Ubuntu workers you have? " workers_number
+       read -p "How many Ubuntu/Debian/Raspbian workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i
+            compile_ansible_host $i true
          done
        fi
     fi
@@ -200,9 +391,22 @@ already_instantiated_cluster(){
        read -p "How many CentOS workers you have? " workers_number
        if check_is_number $workers_number; then
          for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i
+            compile_ansible_host $i true
          done
        fi
+    fi
+
+    read -p "Do you have Windows Server workers?[y/n]" windows_workers
+    export windows_workers=${windows_workers}
+    if check_answer ${windows_workers}; then
+        echo "Compiling Windows Section"
+        echo "[windows-workers]" >> hosts
+        read -p "How many Windows Server workers you have? " workers_number
+        if check_is_number ${workers_number}; then
+            for i in $(seq 1 $workers_number); do
+             compile_ansible_host $i false
+            done
+        fi
     fi
 
     echo "Adding last section"
@@ -216,14 +420,18 @@ already_instantiated_cluster(){
        echo "centos-workers" >> hosts
     fi
     
-    $_ex 'ansible-playbook master.yml'
+    if check_answer ${windows_workers}; then
+         echo "windows-workers" >> hosts
+    fi
 
-    if [ "${ssh_present}" = "n" -o "${ssh_present}" = "N" -o "${ssh_present}" = "No" ]; then
+    $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic} cert_type=${docker_cert}"'
+
+    if [ "${SSH_PRESENT}" = "n" -o "${SSH_PRESENT}" = "N" -o "${SSH_PRESENT}" = "No" ]; then
        if check_binary sshpass; then
-          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        else
           $_ex "$PKG_MGR install  -y sshpass"
-          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        fi
     else
        pass=$(echo $present | grep ansible_ssh_pass)
@@ -243,6 +451,19 @@ already_instantiated_cluster(){
        fi
     fi
 }
+
+ctrl_c(){
+   echo "Got ctrl+c cleaning..."
+   $_ex "rm -rf certs/ keys/"
+   if [ -f hosts ]; then
+      $_ex "rm hosts"
+   fi
+   echo "cleaned! exiting"
+   exit 1
+}
+
+ # trap ctrl-c and call ctrl_c() 
+trap ctrl_c INT
 
 #Execute command?
 _ex='sh -c'
@@ -278,33 +499,44 @@ echo "This script requires administrative privileges"
 $_ex 'echo "$USER" >> /dev/null'
 export current_user=$USER
 
-read -p "Did you already instantiated machine for swarm?[y/n] " required_openstack
+read -p "Do you require also machine creation?[y/n] " required_openstack
 export required_openstack=${required_openstack}
 
-if check_answer ${required_openstack}; then
+if ! check_answer ${required_openstack}; then
     already_instantiated_cluster
 else
     
     if ! check_binary ansible; then
         install_ansible
     fi
-    $_ex 'ansible-playbook deploy_machines_openstack.yml'
+    read -p "Do you want to deploy all instances with a floating ip?[y/n] " all_floating
+    export all_floating=${all_floating}
+
+    echo "Installing playbook prerequisite"
+    install_pip_prerequisite shade
+    $_ex "ansible-playbook deploy_machines_openstack.yml -e \"all_floating=${all_floating}\""
     source ./env
     #if check_answer ${UBUNTU_MANAGER}; then
     #    $_ex 'ansible-playbook ubuntu.yml'
     #fi
     #$_ex 'ansible-playbook master.yml'
-    $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
-    ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+    if ! check_answer ${all_floating}; then
+        $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
+        ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+    fi
 fi
 
 echo "Configuring local docker client"
 
 if ! check_binary docker; then
-   if ! check_binary curl; then
-     $_ex "$PKG_MGR install -y curl"
+   read -p "Docker is currently not installed do you want to install it?" docker_req
+   export docker_req=$docker_req
+   if check_answer $docker_req; then
+      if ! check_binary curl; then
+        $_ex "$PKG_MGR install -y curl"
+      fi
+      curl -sSL https://get.docker.com/ | sh
    fi
-   curl -sSL https://get.docker.com/ | sh
 fi
 
 if [ ! -d "$HOME/.docker" ]; then
@@ -317,16 +549,33 @@ cp certs/* $HOME/.docker/${host_name}
 $_ex "chown -R $current_user:$current_user /home/$current_user/.docker/"
 
 echo "Generating source file"
-echo "export DOCKER_CERT_PATH=$HOME/.docker/$host_name" > docker_remote
-echo "export DOCKER_HOST=tcp://$host_name:2376" >> docker_remote
-echo "export DOCKER_TLS_VERIFY=1" >> docker_remote
+echo "export DOCKER_CERT_PATH=$HOME/.docker/$host_name" > $HOME/docker_remote
+echo "export DOCKER_HOST=tcp://$host_name:2376" >> $HOME/docker_remote
+echo "export DOCKER_TLS_VERIFY=1" >> $HOME/docker_remote
 
-echo "Cleaning up"
-$_ex 'rm -rf keys/ certs/'
-$_ex 'rm hosts'
-
-if ! check_answer $required_openstack; then
-   $_ex 'rm env'
+read -p "Do you want to deploy portainer (http://portainer.io/) on your swarm?[y/n] " portainer
+export portainer=$portainer
+if check_answer $portainer; then
+    $_ex "ansible-playbook portainer.yml --extra-vars=\"openstack=$required_openstack\""
 fi
 
-echo "Everything should be properly configured, please run 'source(.)  docker_remote' in order to interact with remote swarm"
+read -p "Do you want to deploy openfaas (http://portainer.io/) on your swarm?[y/n] " openfaas
+export openfaas=$openfaas                                                                    
+if check_answer $openfaas; then                                                               
+    $_ex "ansible-playbook openfaas.yml --extra-vars=\"openstack=$required_openstack\""       
+fi                                                                                             
+
+echo "Cleaning up"
+
+if check_answer $required_openstack; then
+   $_ex 'rm env'
+   if ! check_answer ${all_floating}; then
+     $_ex 'rm -rf keys/ certs/'
+     $_ex 'rm hosts'
+   fi
+else
+  $_ex 'rm -rf keys/ certs/'
+  $_ex 'rm hosts'
+fi
+
+echo "Everything should be properly configured, please run 'source(.)  docker_remote' in your home directory ($HOME) in order to interact with remote swarm"

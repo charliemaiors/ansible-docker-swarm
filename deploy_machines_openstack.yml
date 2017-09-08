@@ -12,13 +12,13 @@
       prompt: "What is the openstack keystone auth endpoint?"
       default: "http://localhost:5000/v2"
       private: no
-    - name: public_network
-      prompt: "What is the name of the openstack public network?"
-      default: "public"
-      private: no
     - name: project_name
       prompt: "What is the project name where deploy the swarm?"
       default: "admin"
+      private: no
+    - name: public_network
+      prompt: "What is the name of the openstack public network?"
+      default: "public"
       private: no
     - name: flavor_name
       prompt: "What is the flavor name (or id) for instances?"
@@ -40,22 +40,18 @@
       prompt: "What is the name of ubuntu image?"
       default: "Ubuntu16.04"
       private: no
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: ubuntu_flavor
       prompt: "What is the desired flavor for Ubuntu Workers?"
       default: "m1.small"
       private: no
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: ubuntu_number
       prompt: "How many ubuntu workers you want?"
       default: "1"
       private: no
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: ubuntu_user
       prompt: "Which is the default user for ubuntu image?"
       default: "ubuntu"
       private: no
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
     - name: centos_workers
       prompt: "Do you want CentOS workers?[y/n]"
       default: "n"
@@ -64,22 +60,18 @@
       prompt: "What is the name of CentOS image?"
       default: "CentOS7"
       private: no
-      when: centos_workers == "y" or centos_workers == "Y"
     - name: centos_flavor
       prompt: "What is the desired flavor for CentOS Workers?"
       default: "m1.small"
       private: no
-      when: centos_workers == "y" or centos_workers == "Y"
     - name: centos_number
       prompt: "How many CentOS workers you want?"
       default: "1"
       private: no
-      when: centos_workers == "y" or centos_workers == "Y"
     - name: centos_user
       prompt: "Which is the default user for centos image?"
       default: "centos"
       private: no
-      when: centos_workers == "y" or centos_workers == "Y"
   tasks:
     - name: define a new security group for docker swarm
       os_security_group:
@@ -260,12 +252,17 @@
         groups: docker 
         ansible_ssh_user: "{{ image_user }}" 
         ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+    - name: export all floating variable
+      local_action: shell echo "export all_floating={{ all_floating }}" > env
     - name: export user variable
-      local_action: shell echo "export ansible_user={{ image_user }}" > env
+      local_action: shell echo "export ansible_user={{ image_user }}" >> env
+      when: all_floating == "n" or all_floating == "N"
     - name: export host variable
       local_action: shell echo "export host_name={{ docker_public }}" >> env
+      when: all_floating == "n" or all_floating == "N"
     - name: create local ansible hosts file
       local_action: shell echo "#This is a generate hosts file for ansible" > hosts
+      when: all_floating == "n" or all_floating == "N"
     - name: deploy ubuntu workers
       os_server:
          auth:
@@ -283,13 +280,42 @@
       with_sequence: count="{{ ubuntu_number }}"
       register: ub_wkr
       when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+    - name: allocate floating ip to project and assign to each ubuntu worker if desired
+      os_floating_ip:
+         auth:
+            auth_url: "{{ openstack_auth_endpoint }}"
+            username: "{{ openstack_user }}"
+            password: "{{ openstack_password }}"
+            project_name: "{{ project_name }}"
+         server: "{{ item.server.name}}"
+         reuse: yes
+         fixed_network: swarm_private
+      with_items: "{{ ub_wkr.results }}"
+      when: all_floating == "y" or all_floating == "Y"
+    - name: getting docker ubuntu workers floating ip if desidered
+      os_server_facts:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         server: docker-ubuntu-worker-*
+      when: all_floating == "y" or all_floating == "Y"
+    - name: add docker ubuntu worker to local ansible inventory
+      add_host:
+        name: "{{ item.public_v4 }}"
+        groups: ubuntu-workers
+        ansible_ssh_user: "{{ ubuntu_user }}"
+        ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+      with_items: "{{ openstack_servers }}"
+      when: all_floating == "y" or all_floating == "Y"
     - name: creating ubuntu workers section
       local_action: shell echo "[ubuntu-workers]" > hosts
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+      when: (all_floating == "n" or all_floating == "N") and (ubuntu_workers == "y" or ubuntu_workers == "Y")
     - name: register ubuntu workers to file
       local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ ubuntu_user }} ansible_ssh_private_key_file=/home/{{ image_user }}/.ssh/{{ keypair.key.name }}" >> hosts
       with_items: "{{ ub_wkr.results }}"
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+      when: (all_floating == "n" or all_floating == "N") and (ubuntu_workers == "y" or ubuntu_workers == "Y")
     - name: deploy centos workers
       os_server:
          auth:
@@ -307,20 +333,64 @@
       with_sequence: count="{{ centos_number }}"
       register: cnt_wkr
       when: centos_workers == "y" or centos_workers == "Y"
+    - name: allocate floating ip to project and assign to each centos worker if desired
+      os_floating_ip:
+         auth:
+            auth_url: "{{ openstack_auth_endpoint }}"
+            username: "{{ openstack_user }}"
+            password: "{{ openstack_password }}"
+            project_name: "{{ project_name }}"
+         server: "{{ item.server.name}}"
+         reuse: yes
+         fixed_network: swarm_private
+      with_items: "{{ cnt_wkr.results }}"
+      when: all_floating == "y" or all_floating == "Y"
+    - name: getting docker centos workers floating ip if desidered
+      os_server_facts:
+         auth:
+           auth_url: "{{ openstack_auth_endpoint }}"
+           username: "{{ openstack_user }}"
+           password: "{{ openstack_password }}"
+           project_name: "{{ project_name }}"
+         server: docker-ubuntu-worker-*
+      when: all_floating == "y" or all_floating == "Y"
+    - name: add docker centos worker to local ansible inventory
+      add_host:
+        name: "{{ item.public_v4 }}"
+        groups: centos-workers
+        ansible_ssh_user: "{{ centos_user }}"
+        ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
+      with_items: "{{ openstack_servers }}"
+      when: all_floating == "y" or all_floating == "Y"
+    - name: add ubuntu workers to workers children group
+      add_host:
+        name: ubuntu-workers
+        groups: workers:children
+      when: (all_floating == "y" or all_floating == "Y") and (ubuntu_workers == "y" or ubuntu_workers == "Y")
+    - name: add centos workers to workers children group
+      add_host:
+        name: centos-workers
+        groups: workers:children
+      when: (all_floating == "y" or all_floating == "Y") and (centos_workers == "y" or centos_workers == "Y")
     - name: creating CentOS workers section
       local_action: shell echo "[centos-workers]" >> hosts
-      when: centos_workers == "y" or centos_workers == "Y"
+      when: (all_floating == "n" or all_floating == "N") and (centos_workers == "y" or centos_workers == "Y")
     - name: register centos workers to file
       local_action: shell echo "{{ item.server.private_v4 }} ansible_connection=ssh ansible_user={{ centos_user }} ansible_ssh_private_key_file=/home/{{ image_user }}/.ssh/{{ keypair.key.name }}" >> hosts
       with_items: "{{ cnt_wkr.results }}"
-      when: centos_workers == "y" or centos_workers == "Y"
+      when: (all_floating == "n" or all_floating == "N") and (centos_workers == "y" or centos_workers == "Y")
     - name: add global section
       local_action: shell echo "[workers:children]" >> hosts
     - name: add ubuntu workers if present
       local_action: shell echo "ubuntu-workers" >> hosts
-      when: ubuntu_workers == "y" or ubuntu_workers == "Y"
+      when: (all_floating == "n" or all_floating == "N") and (ubuntu_workers == "y" or ubuntu_workers == "Y")
     - name: add centos workers if present
       local_action: shell echo "centos-workers" >> hosts
-      when: centos_workers == "y" or centos_workers == "Y"
+      when: (all_floating == "n" or all_floating == "N") and (centos_workers == "y" or centos_workers == "Y")
+
 - name: including master playbook
-  include: master.yml
+  include: master.yml all_floating="{{ all_floating }}" cert_type="ip"
+
+- name: include worker if all_floating
+  include: worker.yml all_floating="{{ all_floating }}"
+  when: all_floating == "y"
