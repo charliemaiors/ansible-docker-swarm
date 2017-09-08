@@ -10,7 +10,11 @@
       register: distribution
     - name: install-python 2 if ubuntu
       become: yes
-      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson aptitude)
+      raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal python-simplejson)
+      when: "'Ubuntu' in distribution.stdout"
+    - name: install aptitude if ubuntu
+      become: yes
+      raw: test -e /usr/bin/aptitude || (apt -y update && apt install -y aptitude)
       when: "'Ubuntu' in distribution.stdout"
     - setup:
   tasks:
@@ -97,11 +101,20 @@
         executable: /bin/bash
       when:
         - windows_workers == "y" and winrm_transport=="credssp"
+    - name: get docker script
+      become: yes
+      get_url: 
+        url: https://get.docker.com/
+        dest: "{{ ansible_env.HOME }}/docker.sh"
+    - name: Changing perm of docker script, adding "+x"
+      become: yes
+      file: dest="{{ ansible_env.HOME }}/docker.sh" mode=a+x
     - name: install docker engine
       become: yes
-      shell: curl -sSL https://get.docker.com/ | sh
+      shell: ./docker.sh
       args:
-        executable: /bin/bash 
+        chdir: "{{ ansible_env.HOME }}"
+        executable: /bin/bash
     - name: enable docker without sudo
       become: yes
       user: name="{{ ansible_env.USER }}" groups=docker append=yes
@@ -120,6 +133,13 @@
       shell: "echo subjectAltName = IP:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
       args:
         executable: /bin/bash
+      when: cert_type == "ip"
+    - name: write server extfile
+      become: yes
+      shell: "echo subjectAltName = DNS:{{ inventory_hostname }},IP:{{ ansible_default_ipv4.address }},IP:127.0.0.1 > /opt/docker/extfileServer.cnf"
+      args:
+        executable: /bin/bash
+      when: cert_type == "dns"
     - name: write client extfile
       become: yes
       shell: echo extendedKeyUsage = clientAuth > /opt/docker/extfileClient.cnf

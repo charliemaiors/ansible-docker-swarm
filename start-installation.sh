@@ -4,6 +4,42 @@ set -x
 
 isnumber='^[0-9]+$'
 
+valid_ip(){
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+
+valid_fqdn(){
+    local fqdn=$1
+    local stat=1
+    
+    host $1 2>&1 > /dev/null 
+    stat=$?
+    
+    return $stat
+}
+
+check_in_system_host_file(){
+   local exist_host=$(cat /etc/hosts | grep $1)
+   
+   if [[ -z ${exist_host} ]]; then
+      return 1
+   else
+      return 0
+   fi
+}
+
 check_binary () {
   echo -n " * Checking for '$1' ... "
   if command -v $1 >/dev/null 2>&1; then
@@ -295,6 +331,18 @@ already_instantiated_cluster(){
     read -p "What is the ip/dns name of remote docker-master? " host_name
     export  host_name=${host_name}
 
+    if valid_ip $host_name; then
+        export docker_cert="ip"
+    elif valid_fqdn $host_name; then
+        export docker_cert="dns"
+    elif check_in_system_host_file $host_name; then
+        export host_name=$(cat /etc/hosts | grep docker | awk '{print $1}') #check if someone put the hosts file alias as docker manager dns
+        export docker_cert="ip"
+    else
+        echo "$host_name is not valid, aborting..."
+        exit 2
+    fi
+
     read -p "What is the default user of docker-master? " ansible_user
     export ansible_user=${ansible_user}
 
@@ -376,7 +424,7 @@ already_instantiated_cluster(){
          echo "windows-workers" >> hosts
     fi
 
-    $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic}"'
+    $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic} cert_type=${docker_cert}"'
 
     if [ "${SSH_PRESENT}" = "n" -o "${SSH_PRESENT}" = "N" -o "${SSH_PRESENT}" = "No" ]; then
        if check_binary sshpass; then
@@ -403,6 +451,19 @@ already_instantiated_cluster(){
        fi
     fi
 }
+
+ctrl_c(){
+   echo "Got ctrl+c cleaning..."
+   $_ex "rm -rf certs/ keys/"
+   if [ -f hosts ]; then
+      $_ex "rm hosts"
+   fi
+   echo "cleaned! exiting"
+   exit 1
+}
+
+ # trap ctrl-c and call ctrl_c() 
+trap ctrl_c INT
 
 #Execute command?
 _ex='sh -c'

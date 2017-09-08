@@ -389,7 +389,7 @@
       when: (all_floating == "n" or all_floating == "N") and (centos_workers == "y" or centos_workers == "Y")
 
 - name: including master playbook
-  include: master.yml all_floating="{{ all_floating }}"
+  include: master.yml all_floating="{{ all_floating }}" cert_type="ip"
 
 - name: include worker if all_floating
   include: worker.yml all_floating="{{ all_floating }}"
