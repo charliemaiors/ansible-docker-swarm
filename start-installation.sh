@@ -311,6 +311,24 @@ compile_linux_ansible_host(){
     fi
 }
 
+compile_section_loop(){
+    if [[ $1 == "ubuntu" ]]; then         
+        worker_type="Ubuntu/Debian/Raspbian"     
+    else         
+        worker_type="$(tr '[:lower:]' '[:upper:]' <<< ${1:0:1})${1:1}"     
+    fi
+
+    echo "Compiling $worker_type section"
+    echo "[${1}-workers]" >> hosts    
+
+    read -p "How many $worker_type workers you have? " workers_number        
+    if check_is_number $workers_number; then          
+        for i in $(seq 1 $workers_number); do             
+            compile_ansible_host $i true          
+        done        
+    fi
+}
+
 install_pip_prerequisite(){
     exist=$(pip freeze | grep $1)
     if [ -z $exist ]; then
@@ -373,40 +391,19 @@ already_instantiated_cluster(){
     read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
     export ubuntu_workers $ubuntu_workers
     if check_answer $ubuntu_workers; then
-       echo "Compiling Ubuntu section"
-       echo "[ubuntu-workers]" >> hosts
-       read -p "How many Ubuntu/Debian/Raspbian workers you have? " workers_number
-       if check_is_number $workers_number; then
-         for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i true
-         done
-       fi
+       compile_section_loop "ubuntu"
     fi
 
     read -p "Do you have CentOS workers?[y/n] " centos_workers
     export centos_workers=$centos_workers
     if check_answer $centos_workers; then
-       echo "Compiling CentOS section"
-       echo "[centos-workers]" >> hosts
-       read -p "How many CentOS workers you have? " workers_number
-       if check_is_number $workers_number; then
-         for i in $(seq 1 $workers_number); do
-            compile_ansible_host $i true
-         done
-       fi
+       compile_section_loop "centos"
     fi
 
     read -p "Do you have Windows Server workers?[y/n]" windows_workers
     export windows_workers=${windows_workers}
     if check_answer ${windows_workers}; then
-        echo "Compiling Windows Section"
-        echo "[windows-workers]" >> hosts
-        read -p "How many Windows Server workers you have? " workers_number
-        if check_is_number ${workers_number}; then
-            for i in $(seq 1 $workers_number); do
-             compile_ansible_host $i false
-            done
-        fi
+        compile_section_loop "windows"
     fi
 
     echo "Adding last section"
@@ -576,6 +573,26 @@ if check_answer $required_openstack; then
 else
   $_ex 'rm -rf keys/ certs/'
   $_ex 'rm hosts'
+fi
+
+read -p "Do you want to generate a zip archive in order to export current configuration on another client node?[y/n] " archive_it
+export archive_it=${archive_it}
+if check_answer $archive_it; then
+    mkdir -p swarm-tar
+    echo "\$Env:DOCKER_CERT_PATH=\"\$env:USER_PROFILE\\.docker\\$host_name" > swarm-tar/docker_remote.ps1
+    echo "\$Env:DOCKER_HOST = \"tcp://$host_name:2376\"" >> swarm-tar/docker_remote.ps1
+    echo "\$Env:DOCKER_TLS_VERIFY=1" >> swarm-tar/docker_remote.ps1
+    echo "\$Env:COMPOSE_CONVERT_WINDOWS_PATHS = \"true\"" >> swarm-tar/docker_remote.ps1
+    echo "This is a generated bat file please use .\\docker_remote.ps1 | Invoke-Expression in order to have your docker client configured" >> swarm-tar/docker_remote.ps1
+    
+    cp $HOME/docker_remote swarm-tar/
+    cp -R $HOME/.docker/$host_name swarm-tar/
+    cp Install-Cert.ps1 swarm-tar/
+    cp install-cert.sh swarm-tar/
+    cp README.txt swarm-tar/
+    tar cvf $HOME/swarm-tar.tar swarm-tar/
+    rm -rf swarm-tar/
+    echo "You have a file called swarm-tar.tar in your home directory ($HOME), please copy it to remote node and uncompress it"
 fi
 
 echo "Everything should be properly configured, please run 'source(.)  docker_remote' in your home directory ($HOME) in order to interact with remote swarm"
