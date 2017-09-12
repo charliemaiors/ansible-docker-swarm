@@ -1,1 +1,2 @@
-Run install-cert.sh or Install-Certs.ps1 depending on your os and then follow script instructions.
+Run "./install-cert.sh" on linux providing sudo password if required 
+or "powershell -ExecutionPolicy unrestricted -file Install-Certs.ps1" (or simple run Set-ExecutionPolicy -ExecutionPolicy Unrestricted on high priviledge powershell)

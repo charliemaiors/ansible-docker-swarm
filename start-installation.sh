@@ -114,7 +114,6 @@ compile_ansible_master(){
             set +x
             stty -echo
             read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
-            export remote_host_password=$remote_host_password
             export HOST_PASSWORD=$remote_host_password
             $_ex "echo \"${host_name} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
             stty echo
@@ -126,7 +125,6 @@ compile_ansible_master(){
         set +x
         stty -echo
         read -p "Please type ssh password (it will not be shown): " host_password
-        export host_password=${host_password}
         export HOST_PASSWORD=${host_password}
         stty echo
         set -x
@@ -443,8 +441,10 @@ already_instantiated_cluster(){
        else
           if [[ -z $host_key_path ]]; then
               host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
+              ssh -tt -i ${host_key_path} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
+          else
+              ssh -tt -i ${host_key_path}/${host_key} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
           fi
-          ssh -tt -i ${host_key_path} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
        fi
     fi
 }
@@ -579,11 +579,11 @@ read -p "Do you want to generate a zip archive in order to export current config
 export archive_it=${archive_it}
 if check_answer $archive_it; then
     mkdir -p swarm-tar
-    echo "\$Env:DOCKER_CERT_PATH=\"\$env:USER_PROFILE\\.docker\\$host_name" > swarm-tar/docker_remote.ps1
+    echo "\$Env:DOCKER_CERT_PATH=\"\$env:USERPROFILE\\.docker\\$host_name\"" > swarm-tar/docker_remote.ps1
     echo "\$Env:DOCKER_HOST = \"tcp://$host_name:2376\"" >> swarm-tar/docker_remote.ps1
-    echo "\$Env:DOCKER_TLS_VERIFY=1" >> swarm-tar/docker_remote.ps1
+    echo "\$Env:DOCKER_TLS_VERIFY=\"1\"" >> swarm-tar/docker_remote.ps1
     echo "\$Env:COMPOSE_CONVERT_WINDOWS_PATHS = \"true\"" >> swarm-tar/docker_remote.ps1
-    echo "This is a generated bat file please use .\\docker_remote.ps1 | Invoke-Expression in order to have your docker client configured" >> swarm-tar/docker_remote.ps1
+    echo "#This is a generated bat file please use .\\docker_remote.ps1 | Invoke-Expression in order to have your docker client configured" >> swarm-tar/docker_remote.ps1
     
     cp $HOME/docker_remote swarm-tar/
     cp -R $HOME/.docker/$host_name swarm-tar/

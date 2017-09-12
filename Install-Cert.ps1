@@ -21,7 +21,7 @@ if (Get-Command docker -errorAction SilentlyContinue)
 		Move-Item $folder.Name $env:USERPROFILE\.docker
 	}
 	
-	Write-Host "Now please run docker_remote.bat | Invoke-Expression in order to have your local docker client configured and use remote swarm"
+	Write-Host "Now please run docker_remote.ps1 | Invoke-Expression in order to have your local docker client configured and use remote swarm (check if your execution policy allows unsigned scripts)"
 	exit 0
 }
 else 
