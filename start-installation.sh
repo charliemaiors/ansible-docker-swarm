@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-set -x 
+#set -x 
 
 isnumber='^[0-9]+$'
 
@@ -589,7 +589,7 @@ if check_answer $archive_it; then
     cp -R $HOME/.docker/$host_name swarm-tar/
     cp Install-Cert.ps1 swarm-tar/
     cp install-cert.sh swarm-tar/
-    cp README.txt swarm-tar/
+    cp Installation.txt swarm-tar/
     tar cvf $HOME/swarm-tar.tar swarm-tar/
     rm -rf swarm-tar/
     echo "You have a file called swarm-tar.tar in your home directory ($HOME), please copy it to remote node and uncompress it"
