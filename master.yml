@@ -3,21 +3,27 @@
     - name: certificate_country
       prompt: What is your country?
       default: "IT"
+      private: no
     - name: certificate_state
       prompt: What is your state or province?
       default: "Emilia"
+      private: no
     - name: certificate_locality
       prompt: What is your locality name?
       default: "Bologna"
+      private: no
     - name: certificate_organization
       prompt: What is your organization name?
       default: "Internet Widgits Pty Ltd"
+      private: no
     - name: certificate_organization_unit
       prompt: What  is your organization unit name?
       default: "section"
+      private: no
     - name: certificate_common_name
       prompt: What is Common Name (e.g. server FQDN or YOUR name)?
       default: "ciao"
+      private: no
   vars:
     all_floating: "n"
     windows_workers: "n"
