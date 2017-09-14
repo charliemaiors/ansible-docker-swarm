@@ -384,7 +384,7 @@ already_instantiated_cluster(){
       compile_ansible_master
     fi
 
-    if [[ ! -f "hosts" ]] && [[ ! -d keys/ ]]; then
+    if [ ! -f "hosts" ]; then
         echo "Preparing workers host file"
         echo "#This is a generate hosts file for ansible" > hosts
 

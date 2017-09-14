@@ -175,7 +175,7 @@
       command: chdir=/opt/docker {{ item }}
       with_items:
         - openssl genrsa -aes256 -passout pass:0p3nssl -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:0p3nssl -days 365 -key ca-key.pem -sha256 -out ca.pem -subj \"/C={{ certificate_country }}/ST={{ certificate_state }}/L={{ certificate_locality }}/O={{ certificate_organization }}/OU={{ certificate_organization_unit }}/CN={{ certificate_common_name }}\"
+        - openssl req -new -x509 -passin pass:0p3nssl -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C={{ certificate_country }}/ST={{ certificate_state }}/L={{ certificate_locality }}/O={{ certificate_organization }}/OU={{ certificate_organization_unit }}/CN={{ certificate_common_name }}"
     - name: generate docker certificates
       become: yes
       command: chdir=/opt/docker {{ item }}
