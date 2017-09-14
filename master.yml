@@ -1,4 +1,23 @@
 - hosts: docker
+  vars_prompt:
+    - name: certificate_country
+      prompt: What is your country?
+      default: "IT"
+    - name: certificate_state
+      prompt: What is your state or province?
+      default: "Emilia"
+    - name: certificate_locality
+      prompt: What is your locality name?
+      default: "Bologna"
+    - name: certificate_organization
+      prompt: What is your organization name?
+      default: "Internet Widgits Pty Ltd"
+    - name: certificate_organization_unit
+      prompt: What  is your organization unit name?
+      default: "section"
+    - name: certificate_common_name
+      prompt: What is Common Name (e.g. server FQDN or YOUR name)?
+      default: "ciao"
   vars:
     all_floating: "n"
     windows_workers: "n"
@@ -150,7 +169,7 @@
       command: chdir=/opt/docker {{ item }}
       with_items:
         - openssl genrsa -aes256 -passout pass:0p3nssl -out ca-key.pem 4096
-        - openssl req -new -x509 -passin pass:0p3nssl -days 365 -key ca-key.pem -sha256 -out ca.pem -subj "/C=IT/ST=Bologna/L=Bologna/O=Uni/OU=IT Department/CN=docker-swarm-ca"
+        - openssl req -new -x509 -passin pass:0p3nssl -days 365 -key ca-key.pem -sha256 -out ca.pem -subj \"/C={{ certificate_country }}/ST={{ certificate_state }}/L={{ certificate_locality }}/O={{ certificate_organization }}/OU={{ certificate_organization_unit }}/CN={{ certificate_common_name }}\"
     - name: generate docker certificates
       become: yes
       command: chdir=/opt/docker {{ item }}
