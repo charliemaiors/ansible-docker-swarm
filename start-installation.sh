@@ -383,44 +383,55 @@ already_instantiated_cluster(){
       install_ansible
       compile_ansible_master
     fi
-    echo "Preparing workers host file"
-    echo "#This is a generate hosts file for ansible" > hosts
 
-    read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
-    export ubuntu_workers $ubuntu_workers
-    if check_answer $ubuntu_workers; then
-       compile_section_loop "ubuntu"
-    fi
+    if [[ ! -f "hosts" ]] && [[ ! -d keys/ ]]; then
+        echo "Preparing workers host file"
+        echo "#This is a generate hosts file for ansible" > hosts
 
-    read -p "Do you have CentOS workers?[y/n] " centos_workers
-    export centos_workers=$centos_workers
-    if check_answer $centos_workers; then
-       compile_section_loop "centos"
-    fi
+        read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
+        export ubuntu_workers $ubuntu_workers
+        if check_answer $ubuntu_workers; then
+        compile_section_loop "ubuntu"
+        fi
 
-    read -p "Do you have Windows Server workers?[y/n]" windows_workers
-    export windows_workers=${windows_workers}
-    if check_answer ${windows_workers}; then
-        compile_section_loop "windows"
-    fi
+        read -p "Do you have CentOS workers?[y/n] " centos_workers
+        export centos_workers=$centos_workers
+        if check_answer $centos_workers; then
+        compile_section_loop "centos"
+        fi
 
-    echo "Adding last section"
-    echo "[workers:children]" >> hosts
+        read -p "Do you have Windows Server workers?[y/n]" windows_workers
+        export windows_workers=${windows_workers}
+        if check_answer ${windows_workers}; then
+            compile_section_loop "windows"
+        fi
 
-    if check_answer $ubuntu_workers; then
-       echo "ubuntu-workers" >> hosts
-    fi
+        echo "Adding last section"
+        echo "[workers:children]" >> hosts
 
-    if check_answer $centos_workers; then
-       echo "centos-workers" >> hosts
-    fi
-    
-    if check_answer ${windows_workers}; then
-         echo "windows-workers" >> hosts
+        if check_answer $ubuntu_workers; then
+        echo "ubuntu-workers" >> hosts
+        fi
+
+        if check_answer $centos_workers; then
+        echo "centos-workers" >> hosts
+        fi
+        
+        if check_answer ${windows_workers}; then
+            echo "windows-workers" >> hosts
+        fi
     fi
 
     $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic} cert_type=${docker_cert}"'
 
+    if [ $? -ne 0 ]; then   
+        read -p "Ansible playbook failed, do you want to clean or just leave it as it is and try to relaunch the script?[y/n] " clean
+        if check_answer $clean; then
+            ctrl_c
+        fi
+        exit 3
+    fi
+    
     if [ "${SSH_PRESENT}" = "n" -o "${SSH_PRESENT}" = "N" -o "${SSH_PRESENT}" = "No" ]; then
        if check_binary sshpass; then
           sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
@@ -450,7 +461,7 @@ already_instantiated_cluster(){
 }
 
 ctrl_c(){
-   echo "Got ctrl+c cleaning..."
+   echo "Cleaning..."
    $_ex "rm -rf certs/ keys/"
    if [ -f hosts ]; then
       $_ex "rm hosts"
