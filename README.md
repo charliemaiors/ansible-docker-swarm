@@ -15,7 +15,7 @@ This script deploy also (on demand at the end of the process) [portainer](https:
 Clone this repository:
 
 ```
-git clone https://bitbucket.org/charliemaiors/ansible-docker-trystack.git swarm-deploy/
+git clone https://github.com/charliemaiors/ansible-docker-swarm.git swarm-deploy/
 ```
 
 Move into cloned directory
