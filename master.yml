@@ -204,16 +204,6 @@
       copy:
         src: docker.conf
         dest: /etc/systemd/system/docker.service.d/docker.conf
-    - name: copy files if nodes are not provisioned with floating ip
-      become: yes
-      copy: src={{ item.src }} dest={{ item.dest }}
-      with_items:
-        - { src: keys/, dest: "{{ ansible_env.HOME }}/.ssh/" }
-        - { src: hosts, dest: /etc/ansible/hosts }
-        - { src: ansible.cfg, dest: "{{ ansible_env.HOME }}" }
-        - { src: worker.yml, dest: "{{ ansible_env.HOME }}/worker.yml" }
-        - { src: worker-ubuntu.yml, dest: "{{ ansible_env.HOME }}/worker-ubuntu.yml" }
-        - { src: worker-windows.yml, dest: "{{ ansible_env.HOME }}/worker-windows.yml" }
     - name: restart docker and reload conf
       become: yes
       systemd:
