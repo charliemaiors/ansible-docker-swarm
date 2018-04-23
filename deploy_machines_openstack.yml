@@ -387,6 +387,11 @@
     - name: add centos workers if present
       local_action: shell echo "centos-workers" >> hosts
       when: (all_floating == "n" or all_floating == "N") and (centos_workers == "y" or centos_workers == "Y")
+    - name: add workers var field
+      local_action: shell echo "[workers:vars]" >> hosts
+      when: (all_floating == "n" or all_floating == "N")
+    - name: add workers jump hosts
+      local_action: shell echo "ansible_ssh_common_args: '-o ProxyCommand="ssh -i {{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }} -W %h:%p -q {{ image_user }}@gateway.example.com"'"
 
 - name: including master playbook
   include: master.yml all_floating="{{ all_floating }}" cert_type="ip"

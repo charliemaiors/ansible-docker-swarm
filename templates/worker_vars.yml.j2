@@ -1,0 +1,1 @@
+ansible_ssh_common_args: '-o ProxyCommand="ssh -i {{ home }}/.ssh/{{ keypair }}-W %h:%p -q {{ image_user }}@{{ remote_ip }}'
