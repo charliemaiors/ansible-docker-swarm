@@ -26,7 +26,7 @@
       private: no
     - name: image_name
       prompt: "What is the image name (or id) for instances (only ubuntu and centos are supported for now)?"
-      default: "CentOS7"
+      default: "Centos7-Latest"
       private: no
     - name: image_user
       prompt: "What is the default user for choosen image?"
@@ -211,6 +211,9 @@
         module: copy
         content: "{{ keypair.key.private_key }}"
         dest: "keys/{{ keypair.key.name }}"
+    - name: create keypair_name variable
+      set_fact: 
+        keypair_name: "{{ keypair.key.name }}"
     - name: creating docker master machine
       os_server:
          auth:
@@ -246,23 +249,15 @@
     - name: get docker master public ip
       set_fact: 
          docker_public: "{{ openstack_servers.0.public_v4 }}"
+    - name: get home variable
+      set_fact:
+        home: "{{ ansible_env.HOME }}"
     - name: add docker master to local ansible inventory
       add_host: 
         name: "{{ docker_public }}" 
         groups: docker 
         ansible_ssh_user: "{{ image_user }}" 
-        ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
-    - name: export all floating variable
-      local_action: shell echo "export all_floating={{ all_floating }}" > env
-    - name: export user variable
-      local_action: shell echo "export ansible_user={{ image_user }}" >> env
-      when: all_floating == "n" or all_floating == "N"
-    - name: export host variable
-      local_action: shell echo "export host_name={{ docker_public }}" >> env
-      when: all_floating == "n" or all_floating == "N"
-    - name: create local ansible hosts file
-      local_action: shell echo "#This is a generate hosts file for ansible" > hosts
-      when: all_floating == "n" or all_floating == "N"
+        ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair_name }}"
     - name: deploy ubuntu workers
       os_server:
          auth:
@@ -280,18 +275,6 @@
       with_sequence: count="{{ ubuntu_number }}"
       register: ub_wkr
       when: ubuntu_workers == "y" or ubuntu_workers == "Y"
-    - name: allocate floating ip to project and assign to each ubuntu worker if desired
-      os_floating_ip:
-         auth:
-            auth_url: "{{ openstack_auth_endpoint }}"
-            username: "{{ openstack_user }}"
-            password: "{{ openstack_password }}"
-            project_name: "{{ project_name }}"
-         server: "{{ item.server.name}}"
-         reuse: yes
-         fixed_network: swarm_private
-      with_items: "{{ ub_wkr.results }}"
-      when: all_floating == "y" or all_floating == "Y"
     - name: getting docker ubuntu workers floating ip if desidered
       os_server_facts:
          auth:
@@ -300,15 +283,13 @@
            password: "{{ openstack_password }}"
            project_name: "{{ project_name }}"
          server: docker-ubuntu-worker-*
-      when: all_floating == "y" or all_floating == "Y"
     - name: add docker ubuntu worker to local ansible inventory
       add_host:
-        name: "{{ item.public_v4 }}"
+        name: "{{ item.private_v4 }}"
         groups: ubuntu-workers
         ansible_ssh_user: "{{ ubuntu_user }}"
         ansible_ssh_private_key_file: "{{ ansible_env.HOME }}/.ssh/{{ keypair.key.name }}"
       with_items: "{{ openstack_servers }}"
-      when: all_floating == "y" or all_floating == "Y"
     - name: creating ubuntu workers section
       local_action: shell echo "[ubuntu-workers]" > hosts
       when: (all_floating == "n" or all_floating == "N") and (ubuntu_workers == "y" or ubuntu_workers == "Y")
