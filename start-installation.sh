@@ -92,7 +92,7 @@ check_local_ansible(){ #Uses negative logic
 }
 
 compile_ansible_master(){
-    $_ex 'echo "[docker]" >> /etc/ansible/hosts'
+    $_ex 'echo "[docker]" > hosts'
 
     read -p "The connection with your master uses ssh key?[y/n] " ssh_present
     export SSH_PRESENT=${ssh_present}
