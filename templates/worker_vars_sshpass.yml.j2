@@ -1,0 +1,2 @@
+ansible_ssh_common_args: '-o ProxyCommand="sshpass -p '{{ ssh_password }}' ssh -o StrictHostKeyChecking=no -W %h:%p -q {{ image_user }}@{{ docker_public }}'
+manager_ip: {{ remote_ip }}

@@ -1,18 +1,10 @@
-- include: worker-ubuntu.yml
-- include: worker-windows.yml
+- import_playbook: worker-ubuntu.yml
+- import_playbook: worker-windows.yml
 - name: common play for workers
   hosts: workers
   vars:
     all_floating: "n"
   tasks:
-    - set_fact:
-        swarm_join_token: "{{ lookup('ini', 'join_token section=docker file=worker') }}"
-        swarm_manager_ip: "{{ lookup('ini', 'manager_ip section=docker file=worker') }}"
-      when: all_floating == "n" or all_floating == "N"
-    - set_fact:
-        swarm_join_token: "{{ lookup('env', 'JOIN_TOKEN') }}"
-        swarm_manager_ip: "{{ lookup('env', 'MASTER_IP') }}"
-      when: all_floating == "y" or all_floating == "Y"
     - name: enable epel-release
       become: yes
       yum:
@@ -79,11 +71,11 @@
         state: restarted
       when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "CentOS")
     - name: join docker swarm
-      shell: "docker swarm join --token {{ swarm_join_token }} {{ swarm_manager_ip }}:2377"
+      shell: "docker swarm join --token {{ swarm_join_token }} {{ manager_ip }}:2377"
       args:
         executable: /bin/bash 
       when: (ansible_distribution == "Ubuntu") or (ansible_distribution == "Debian") or (ansible_distribution == "RedHat") or (ansible_distribution == "CentOS")
     - name: join docker swarm windows hosts
-      win_shell: docker swarm join --token {{ swarm_join_token }} {{ swarm_manager_ip }}:2377
+      win_shell: docker swarm join --token {{ swarm_join_token }} {{ manager_ip }}:2377
       when:
         - ansible_os_family == "Windows"

@@ -344,6 +344,7 @@ install_ansible(){
 }
 
 already_instantiated_cluster(){
+    install_pip_prerequisite envtpl
     read -p "What is the ip/dns name of remote docker-master? " host_name
     export  host_name=${host_name}
 
@@ -387,39 +388,39 @@ already_instantiated_cluster(){
     if [ ! -f "hosts" ]; then
         echo "Preparing workers host file"
         echo "#This is a generate hosts file for ansible" > hosts
+    fi
 
-        read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
-        export ubuntu_workers $ubuntu_workers
-        if check_answer $ubuntu_workers; then
-        compile_section_loop "ubuntu"
-        fi
+    read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
+    export ubuntu_workers $ubuntu_workers
+    if check_answer $ubuntu_workers; then
+    compile_section_loop "ubuntu"
+    fi
 
-        read -p "Do you have CentOS workers?[y/n] " centos_workers
-        export centos_workers=$centos_workers
-        if check_answer $centos_workers; then
-        compile_section_loop "centos"
-        fi
+    read -p "Do you have CentOS workers?[y/n] " centos_workers
+    export centos_workers=$centos_workers
+    if check_answer $centos_workers; then
+    compile_section_loop "centos"
+    fi
 
-        read -p "Do you have Windows Server workers?[y/n]" windows_workers
-        export windows_workers=${windows_workers}
-        if check_answer ${windows_workers}; then
-            compile_section_loop "windows"
-        fi
+    read -p "Do you have Windows Server workers?[y/n]" windows_workers
+    export windows_workers=${windows_workers}
+    if check_answer ${windows_workers}; then
+        compile_section_loop "windows"
+    fi
 
-        echo "Adding last section"
-        echo "[workers:children]" >> hosts
+    echo "Adding last section"
+    echo "[workers:children]" >> hosts
 
-        if check_answer $ubuntu_workers; then
-        echo "ubuntu-workers" >> hosts
-        fi
+    if check_answer $ubuntu_workers; then
+    echo "ubuntu-workers" >> hosts
+    fi
 
-        if check_answer $centos_workers; then
-        echo "centos-workers" >> hosts
-        fi
-        
-        if check_answer ${windows_workers}; then
-            echo "windows-workers" >> hosts
-        fi
+    if check_answer $centos_workers; then
+    echo "centos-workers" >> hosts
+    fi
+    
+    if check_answer ${windows_workers}; then
+        echo "windows-workers" >> hosts
     fi
 
     $_ex 'ansible-playbook master.yml --extra-vars "windows_workers=${windows_workers} winrm_transport=${winrm_transport:=basic} cert_type=${docker_cert}"'

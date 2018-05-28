@@ -29,7 +29,7 @@
       default: "0p3nssl"
       private: yes
   vars:
-    all_floating: "n"
+    remote_ip: "1.2.3.4"
     windows_workers: "n"
     winrm_transport: "basic"
   gather_facts: False
@@ -198,23 +198,7 @@
     - name: set fact for join token
       set_fact:
         swarm_join_token: "{{ join_token.stdout }}"
-        keypair_name: "{{ hostvars['docker'][0].ansible_ssh_private_key_file }}"
-        image_user: "{{ ansible_env.USER }}"
-    - name: set fact docker_public if is not defined
-      set_fact:
-        docker_public: "{{ ansible_default_ipv4 }}"
-      when: manager_public_ip is not defined
-    - name: set fact remote_ip
-      set_fact: 
-        remote_ip: "{{ ansible_default_ipv4 }}"
-      when: manager_private_ip is not defined
-    - name: export master ip if all floating
-      local_action: command "export MASTER_IP={{ ansible_default_ipv4.address }}"
-      when: all_floating == "y" or all_floating == "Y"
-    - name: insert manager ip address in ini file
-      ini_file:
-        dest: "{{ ansible_env.HOME }}/worker"
-        section: docker
-        option: manager_ip
-        value: "{{ ansible_default_ipv4.address }}"
-      when: all_floating == "n" or all_floating == "N"
+
+- name: import playbook for workers
+  import_playbook: worker.yml
+
