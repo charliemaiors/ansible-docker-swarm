@@ -156,6 +156,10 @@ compile_ansible_master(){
             set -x
         fi
 
+        if ! check_binary ssh_pass; then
+            $_ex "$PKG_MGR install -y sshpass"
+        fi
+
         env ssh_password=$host_password image_user=$ansible_user docker_public=$host_name remote_ip=$host_name j2 templates/worker_vars_sshpass.yml.j2 > group_vars/workers/vars.yml
     fi
 }
@@ -224,37 +228,31 @@ compile_linux_ansible_host(){
 
         read -p "Private key is in the ${HOME}/.ssh local folder?[y/n] " workers_loc_answer
         if check_answer ${workers_loc_answer}; then
-            $_ex 'cp $HOME/.ssh/${ssh_worker_key} keys/' # If user can't modify current folder this script is already terminated
+            echo "Nothing to copy, key is already in place" # If user can't modify current folder this script is already terminated
         else
-            read -p "The private key is already in place in remote $2/.ssh folder?[y/n] " workers_loc_answer
+            read -p "The private key is somewhere else on your machine?[y/n] " workers_loc_answer
             if check_answer ${workers_loc_answer}; then
-                echo "Nothing to copy, key is already in place"
+                read -p "Please write the absolute REMOTE path (without the key name): " remote_path
+                $_ex "cp $remote_path/$ssh_worker_key $HOME/.ssh/"
             else
-                read -p "The key is somewhere else on remote host?[y/n] " workers_loc_answer
-                if check_answer ${workers_loc_answer}; then #Are you kidding me????
-                    read -p "Please write the absolute REMOTE path (without the key name): " remote_path
+                echo "Please copy your ssh key on your machine, or modify the ansible.cfg in order to enable the ForwardAgent and configure the script in order to use ssh args"
+                exit 3
+            fi
+            
+            read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
+            export sudo_password_mandatory=$sudo_password_mandatory
 
-                    read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
-                    export sudo_password_mandatory=$sudo_password_mandatory
+            if ! check_answer $sudo_password_mandatory; then
+                set +x
+                stty -echo
+                read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
+                export remote_host_password=$remote_host_password
 
-                    if ! check_answer $sudo_password_mandatory; then
-                        set +x
-                        stty -echo
-                        read -p "Please type remote root password, it will not be echoed or recorded (except in ansible host file): " remote_host_password
-                        export remote_host_password=$remote_host_password
-
-                        echo "${1} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts
-                        stty echo
-                        set -x
-                    else 
-                        echo "${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${remote_path}/${ssh_worker_key}" >> hosts
-                    fi
-
-                    continue
-                else
-                    read -p "Please enter the absolute LOCAL path (without key name): " local_path
-                     $_ex 'cp ${local_path}/${ssh_worker_key} keys/'
-                fi
+                echo "${1} ansible_become_password=${remote_host_password}  ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${HOME}/.ssh/${ssh_worker_key}" >> hosts
+                stty echo
+                set -x
+            else 
+                echo "${1} ansible_connection=ssh ansible_user=${2} ansible_ssh_private_key_file=${HOME}/.ssh/${ssh_worker_key}" >> hosts
             fi
         fi
 
