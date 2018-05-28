@@ -200,5 +200,5 @@
         swarm_join_token: "{{ join_token.stdout }}"
 
 - name: import playbook for workers
-  import_playbook: worker.yml
+  import_playbook: worker.yml swarm_join_token="{{ swarm_join_token }}"
 

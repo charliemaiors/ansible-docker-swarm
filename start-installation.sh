@@ -101,11 +101,10 @@ compile_ansible_master(){
         export host_key=${host_key}
 
         read -p "is in the ${HOME}/.ssh folder?[y/n] " loc_answer
-        if check_answer $loc_answer; then
-            export host_key_path=$HOME/.ssh
-        else
+        if ! check_answer $loc_answer; then
             read -p "Where is located docker-master ssh key?[only path] "host_key_loc
-            export host_key_path=${host_key_loc}
+            $_ex "mv $host_key_loc/$host_key $HOME/.ssh"
+            $_ex "chmod 600 $HOME/.ssh/$host_key"
         fi
         read -p "Your remote user could use sudo without password?[y/n] " sudo_password_mandatory
         export sudo_password_mandatory=$sudo_password_mandatory
@@ -121,6 +120,7 @@ compile_ansible_master(){
         else 
             $_ex "echo \"${host_name} ansible_connection=ssh ansible_user=${ansible_user} ansible_ssh_private_key_file=${host_key_path}/${host_key}\" >> /etc/ansible/hosts"
         fi
+        env master_home=$HOME keypair_name=$host_key image_user=$ansible_user docker_public=$host_name remote_ip=$host_name j2 templates/worker_vars.yml.j2 > group_vars/workers/vars.yml
     else
         set +x
         stty -echo
@@ -155,6 +155,8 @@ compile_ansible_master(){
             stty echo
             set -x
         fi
+
+        env ssh_password=$host_password image_user=$ansible_user docker_public=$host_name remote_ip=$host_name j2 templates/worker_vars_sshpass.yml.j2 > group_vars/workers/vars.yml
     fi
 }
 
@@ -322,7 +324,7 @@ compile_section_loop(){
     read -p "How many $worker_type workers you have? " workers_number        
     if check_is_number $workers_number; then          
         for i in $(seq 1 $workers_number); do             
-            compile_ansible_host $i true          
+            compile_ansible_host $i $2          
         done        
     fi
 }
@@ -344,7 +346,7 @@ install_ansible(){
 }
 
 already_instantiated_cluster(){
-    install_pip_prerequisite envtpl
+    
     read -p "What is the ip/dns name of remote docker-master? " host_name
     export  host_name=${host_name}
 
@@ -363,23 +365,10 @@ already_instantiated_cluster(){
     read -p "What is the default user of docker-master? " ansible_user
     export ansible_user=${ansible_user}
 
+    install_pip_prerequisite j2cli[yaml]
     if check_binary ansible; then
-      read -p "is ansible host already configured with docker section which point to your docker-master node?[y/n] " already_configured
-      export already_configured=$already_configured
-      if check_answer $already_configured; then
-
-      echo "Double checking is better..."
-
-      if check_local_ansible; then
-        echo "Account is not configured or hostname contains typos, please check your local installation of ansible! Exiting..." >&2
-        exit 1
-      fi
-
-      echo "Everything configured"
-      else
-        echo "Configuring..."
-        compile_ansible_master
-      fi
+      echo "Configuring..."
+      compile_ansible_master
     else
       install_ansible
       compile_ansible_master
@@ -393,19 +382,19 @@ already_instantiated_cluster(){
     read -p "Do you have Ubuntu/Debian/Raspbian workers?[y/n] " ubuntu_workers
     export ubuntu_workers $ubuntu_workers
     if check_answer $ubuntu_workers; then
-    compile_section_loop "ubuntu"
+    compile_section_loop "ubuntu" true
     fi
 
     read -p "Do you have CentOS workers?[y/n] " centos_workers
     export centos_workers=$centos_workers
     if check_answer $centos_workers; then
-    compile_section_loop "centos"
+    compile_section_loop "centos" true
     fi
 
     read -p "Do you have Windows Server workers?[y/n]" windows_workers
     export windows_workers=${windows_workers}
     if check_answer ${windows_workers}; then
-        compile_section_loop "windows"
+        compile_section_loop "windows" false
     fi
 
     echo "Adding last section"
@@ -431,33 +420,6 @@ already_instantiated_cluster(){
             ctrl_c
         fi
         exit 3
-    fi
-    
-    if [ "${SSH_PRESENT}" = "n" -o "${SSH_PRESENT}" = "N" -o "${SSH_PRESENT}" = "No" ]; then
-       if check_binary sshpass; then
-          sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-       else
-          $_ex "$PKG_MGR install  -y sshpass"
-          sshpass -p "${HOST_PASSWORD}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-       fi
-    else
-       pass=$(echo $present | grep ansible_ssh_pass)
-       if [[ ! -z ${pass} ]]; then
-          pass=$(echo $present | grep -o ansible_ssh_pass.* | cut -f2 -d=)
-          if check_binary sshpass; then
-             continue
-          else
-             $_ex "$PKG_MGR install -y sshpass"
-          fi
-          sshpass -p "${host_password}" ssh -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-       else
-          if [[ -z $host_key_path ]]; then
-              host_key_path=$(cat /etc/ansible/hosts | grep ${host_name} |grep -o ansible_ssh_private_key_file.* | cut -f2 -d=)
-              ssh -tt -i ${host_key_path} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-          else
-              ssh -tt -i ${host_key_path}/${host_key} -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-          fi
-       fi
     fi
 }
 
@@ -518,21 +480,10 @@ else
     if ! check_binary ansible; then
         install_ansible
     fi
-    read -p "Do you want to deploy all instances with a floating ip?[y/n] " all_floating
-    export all_floating=${all_floating}
 
     echo "Installing playbook prerequisite"
     install_pip_prerequisite shade
-    $_ex "ansible-playbook deploy_machines_openstack.yml -e \"all_floating=${all_floating}\""
-    source ./env
-    #if check_answer ${UBUNTU_MANAGER}; then
-    #    $_ex 'ansible-playbook ubuntu.yml'
-    #fi
-    #$_ex 'ansible-playbook master.yml'
-    if ! check_answer ${all_floating}; then
-        $_ex "chown -R $current_user:$current_user /home/$current_user/.ssh"
-        ssh -tt -i ${HOME}/.ssh/swarm_key -o "StrictHostKeyChecking=no" ${ansible_user}@${host_name} 'ansible-playbook worker.yml'
-    fi
+    $_ex "ansible-playbook deploy_machines_openstack.yml"
 fi
 
 echo "Configuring local docker client"
