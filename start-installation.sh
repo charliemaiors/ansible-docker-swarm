@@ -353,7 +353,7 @@ already_instantiated_cluster(){
     elif valid_fqdn $host_name; then
         export docker_cert="dns"
     elif check_in_system_host_file $host_name; then
-        export host_name=$(cat /etc/hosts | grep docker | awk '{print $1}') #check if someone put the hosts file alias as docker manager dns
+        export host_name=$(cat /etc/hosts | grep $host_name | awk '{print $1}') #check if someone put the hosts file alias as docker manager dns
         export docker_cert="ip"
     else
         echo "$host_name is not valid, aborting..."
